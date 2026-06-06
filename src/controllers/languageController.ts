@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { LanguageModel } from '../models/Language';
+import { getIsMongoConnected } from '../lib/mongodb';
+import { getAllLanguages, getLanguageById, createLanguage as createMockLanguage, updateLanguage as updateMockLanguage, deleteLanguage as deleteMockLanguage } from '../lib/mockStore';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,18 +29,24 @@ export const listLanguages = async (request: FastifyRequest, reply: FastifyReply
     const query = request.query as { includeSkip?: string };
     const includeSkip = query.includeSkip === 'true';
 
-    const languages = await LanguageModel.find({ isActive: true }).sort({ order: 1, createdAt: -1 }).lean();
-
-    const filteredLanguages = languages.map(lang => ({
-      id: lang._id.toString(),
-      name: lang.name,
-      code: lang.code,
-      image: lang.image,
-      isActive: lang.isActive,
-      order: lang.order,
-      createdAt: lang.createdAt,
-      updatedAt: lang.updatedAt
-    }));
+    let filteredLanguages;
+    
+    if (getIsMongoConnected()) {
+      const languages = await LanguageModel.find({ isActive: true }).sort({ order: 1, createdAt: -1 }).lean();
+      filteredLanguages = languages.map(lang => ({
+        id: lang._id.toString(),
+        name: lang.name,
+        code: lang.code,
+        image: lang.image,
+        isActive: lang.isActive,
+        order: lang.order,
+        createdAt: lang.createdAt,
+        updatedAt: lang.updatedAt
+      }));
+    } else {
+      const languages = getAllLanguages();
+      filteredLanguages = languages;
+    }
 
     const data = includeSkip
       ? [
@@ -74,7 +82,13 @@ export const listLanguages = async (request: FastifyRequest, reply: FastifyReply
 export const getLanguage = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { id } = request.params as { id: string };
-    const language = await LanguageModel.findById(id).lean();
+    let language;
+
+    if (getIsMongoConnected()) {
+      language = await LanguageModel.findById(id).lean();
+    } else {
+      language = getLanguageById(id);
+    }
 
     if (!language) {
       return reply.status(404).send({ success: false, message: 'Language not found' });
@@ -82,7 +96,7 @@ export const getLanguage = async (request: FastifyRequest, reply: FastifyReply) 
 
     return {
       success: true,
-      data: {
+      data: getIsMongoConnected() ? {
         id: language._id.toString(),
         name: language.name,
         code: language.code,
@@ -91,7 +105,7 @@ export const getLanguage = async (request: FastifyRequest, reply: FastifyReply) 
         order: language.order,
         createdAt: language.createdAt,
         updatedAt: language.updatedAt
-      }
+      } : language
     };
   } catch (error) {
     console.error('Error getting language:', error);

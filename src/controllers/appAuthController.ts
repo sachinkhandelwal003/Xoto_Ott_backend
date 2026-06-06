@@ -1,11 +1,28 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 import { UserModel } from '../models/User';
+import { getIsMongoConnected } from '../lib/mongodb';
+import { getAllUsers, getUserById, updateUser } from '../lib/mockStore';
 import { MessageCentralService } from '../services/messageCentralService';
 
 const messageCentralService = new MessageCentralService();
 const STATIC_OTP = '1234';
+
+// In-memory user storage for mock mode
+type MockAppUser = {
+  id: string;
+  phone: string;
+  name: string;
+  email: string;
+  preferredLanguage?: string;
+  languageSelectionSkipped: boolean;
+  lastLogin?: Date;
+  loginCount: number;
+};
+
+const mockAppUsers: MockAppUser[] = [];
 
 // Validation schemas
 const sendOtpSchema = z.object({
@@ -39,13 +56,15 @@ export const sendOtp = async (request: FastifyRequest, reply: FastifyReply) => {
       return reply.status(400).send(result);
     }
 
-    return reply.status(200).send({
-      ...result,
-      otp: STATIC_OTP,
-    });
+    return reply.status(200).send(result);
   } catch (error) {
     console.error('Error sending OTP:', error);
-    return reply.status(500).send({ success: false, message: 'Internal server error' });
+    console.error('Error stack:', (error as Error).stack);
+    return reply.status(500).send({ 
+      success: false, 
+      message: 'Internal server error',
+      error: (error as Error).message 
+    });
   }
 };
 
@@ -63,34 +82,61 @@ export const verifyOtp = async (request: FastifyRequest, reply: FastifyReply) =>
 
     const verifyResult = await messageCentralService.verifyOtp(verificationId, otp);
     if (!verifyResult.success) {
-      return reply.status(400).send({ success: false, error: `Invalid OTP. Use ${STATIC_OTP}` });
+      return reply.status(400).send({ 
+        success: false, 
+        message: verifyResult.message || `Invalid OTP. Use ${STATIC_OTP}` 
+      });
     }
 
-    let user = await UserModel.findOne({ phone: mobileNumber });
+    let user: any = null;
 
-    if (!user) {
-      const newProfile = {
-        name: 'User',
-        isKids: false,
-        maturityLevel: 18,
-      };
-      user = new UserModel({
-        phone: mobileNumber,
-        name: 'User',
-        email: `${mobileNumber}@temp.local`,
-        profiles: [newProfile],
-        languageSelectionSkipped: false,
-      });
-      await user.save();
+    if (getIsMongoConnected()) {
+      user = await UserModel.findOne({ phone: mobileNumber });
+
+      if (!user) {
+        const newProfile = {
+          name: 'User',
+          isKids: false,
+          maturityLevel: 18,
+        };
+        user = new UserModel({
+          phone: mobileNumber,
+          name: 'User',
+          email: `${mobileNumber}@temp.local`,
+          profiles: [newProfile],
+          languageSelectionSkipped: false,
+        });
+        await user.save();
+      } else {
+        user.lastLogin = new Date();
+        user.loginCount += 1;
+        await user.save();
+      }
     } else {
-      user.lastLogin = new Date();
-      user.loginCount += 1;
-      await user.save();
+      // Find in mock app users
+      user = mockAppUsers.find(u => u.phone === mobileNumber);
+      
+      if (!user) {
+        user = {
+          id: uuidv4(),
+          phone: mobileNumber,
+          name: 'User',
+          email: `${mobileNumber}@temp.local`,
+          preferredLanguage: undefined,
+          languageSelectionSkipped: false,
+          lastLogin: new Date(),
+          loginCount: 1,
+        };
+        mockAppUsers.push(user);
+      } else {
+        user.lastLogin = new Date();
+        user.loginCount += 1;
+      }
     }
 
     const server = request.server as any;
     const tokenPayload = {
-      id: user._id.toString(),
+      id: getIsMongoConnected() ? user._id.toString() : user.id,
       name: user.name,
       phone: user.phone,
       role: 'user' as const,
@@ -102,14 +148,18 @@ export const verifyOtp = async (request: FastifyRequest, reply: FastifyReply) =>
     return reply.status(200).send({
       success: true,
       accessToken,
-      userId: user._id.toString(),
+      userId: getIsMongoConnected() ? user._id.toString() : user.id,
       expiresIn: 900,
       preferredLanguage: user.preferredLanguage,
-      languageSelectionSkipped: user.languageSelectionSkipped ?? false,
     });
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    return reply.status(500).send({ success: false, message: 'Internal server error' });
+    console.error('Error stack:', (error as Error).stack);
+    return reply.status(500).send({ 
+      success: false, 
+      message: 'Internal server error',
+      error: (error as Error).message 
+    });
   }
 };
 
@@ -125,23 +175,36 @@ export const setPreferredLanguage = async (request: FastifyRequest, reply: Fasti
       });
     }
 
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return reply.status(404).send({ success: false, message: 'User not found' });
-    }
+    let user: any = null;
 
-    user.preferredLanguage = body.data.language;
-    user.languageSelectionSkipped = false;
-    if (user.profiles.length > 0) {
-      user.profiles[0].language = body.data.language;
+    if (getIsMongoConnected()) {
+      user = await UserModel.findById(userId);
+      if (!user) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      user.preferredLanguage = body.data.language;
+      user.languageSelectionSkipped = false;
+      if (user.profiles.length > 0) {
+        user.profiles[0].language = body.data.language;
+      }
+      await user.save();
+    } else {
+      const mockUserIndex = mockAppUsers.findIndex(u => u.id === userId);
+      if (mockUserIndex === -1) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      mockAppUsers[mockUserIndex].preferredLanguage = body.data.language;
+      mockAppUsers[mockUserIndex].languageSelectionSkipped = false;
+      user = mockAppUsers[mockUserIndex];
     }
-    await user.save();
 
     return reply.status(200).send({
       success: true,
       message: 'Preferred language updated successfully',
       data: {
-        userId: user._id.toString(),
+        userId: getIsMongoConnected() ? user._id.toString() : user.id,
         preferredLanguage: user.preferredLanguage,
         languageSelectionSkipped: user.languageSelectionSkipped,
       },
@@ -155,23 +218,37 @@ export const setPreferredLanguage = async (request: FastifyRequest, reply: Fasti
 export const skipPreferredLanguage = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { userId } = request.params as { userId: string };
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return reply.status(404).send({ success: false, message: 'User not found' });
-    }
 
-    user.preferredLanguage = undefined;
-    user.languageSelectionSkipped = true;
-    if (user.profiles.length > 0) {
-      user.profiles[0].language = undefined;
+    let user: any = null;
+
+    if (getIsMongoConnected()) {
+      user = await UserModel.findById(userId);
+      if (!user) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      user.preferredLanguage = undefined;
+      user.languageSelectionSkipped = true;
+      if (user.profiles.length > 0) {
+        user.profiles[0].language = undefined;
+      }
+      await user.save();
+    } else {
+      const mockUserIndex = mockAppUsers.findIndex(u => u.id === userId);
+      if (mockUserIndex === -1) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      mockAppUsers[mockUserIndex].preferredLanguage = undefined;
+      mockAppUsers[mockUserIndex].languageSelectionSkipped = true;
+      user = mockAppUsers[mockUserIndex];
     }
-    await user.save();
 
     return reply.status(200).send({
       success: true,
       message: 'Language selection skipped successfully',
       data: {
-        userId: user._id.toString(),
+        userId: getIsMongoConnected() ? user._id.toString() : user.id,
         preferredLanguage: null,
         languageSelectionSkipped: true,
       },
