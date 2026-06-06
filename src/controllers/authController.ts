@@ -2,8 +2,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { storeRefreshToken } from '../lib/redis';
-import { adminUsers } from '../lib/mockStore';
-import { getIsMongoConnected } from '../lib/mongodb';
 import { AdminUserModel } from '../models/AdminUser';
 
 export const login = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -16,56 +14,31 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       });
     }
 
-    let payload: any = null;
+    const admin = await AdminUserModel.findOne({
+      email: email.toLowerCase(),
+      isActive: true,
+    });
 
-    if (getIsMongoConnected()) {
-      const admin = await AdminUserModel.findOne({
-        email: email.toLowerCase(),
-        isActive: true,
-      });
-
-      if (admin) {
-        const valid = await bcrypt.compare(
-          password,
-          admin.passwordHash
-        );
-
-        if (valid) {
-          payload = {
-            id: admin._id.toString(),
-            email: admin.email,
-            name: admin.name,
-            role: admin.role,
-          };
-
-          await AdminUserModel.findByIdAndUpdate(admin._id, {
-            $set: { lastLogin: new Date() },
-            $inc: { loginCount: 1 },
-          });
-        }
-      }
-    } else {
-      const admin = adminUsers.find(
-        (a) =>
-          a.email === email &&
-          a.password === password
-      );
-
-      if (admin) {
-        payload = {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          role: admin.role,
-        };
-      }
+    if (!admin) {
+      return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
-    if (!payload) {
-      return reply.status(401).send({
-        error: 'Invalid credentials',
-      });
+    const valid = await bcrypt.compare(password, admin.passwordHash);
+    if (!valid) {
+      return reply.status(401).send({ error: 'Invalid credentials' });
     }
+
+    const payload = {
+      id: admin._id.toString(),
+      email: admin.email,
+      name: admin.name,
+      role: admin.role,
+    };
+
+    await AdminUserModel.findByIdAndUpdate(admin._id, {
+      $set: { lastLogin: new Date() },
+      $inc: { loginCount: 1 },
+    });
 
     const server = request.server as any;
     const accessToken = server.jwt.sign(payload, {
@@ -79,10 +52,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       }
     );
 
-    await storeRefreshToken(
-      refreshToken,
-      payload.id
-    );
+    await storeRefreshToken(refreshToken, payload.id);
 
     return reply.status(200).send({
       accessToken,
