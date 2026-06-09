@@ -68,6 +68,30 @@ export default function Login() {
           <p className="text-gray-400 mt-2 text-lg">{settings.loginSubtitle}</p>
         </div>
 
+        {/* Demo Credentials Box */}
+        <div className="mb-4 p-4 rounded-2xl border border-dashed border-zinc-600 bg-zinc-800/60 backdrop-blur-sm">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Demo Credentials</p>
+          <div className="flex flex-col gap-1 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Email</span>
+              <span
+                className="text-red-400 font-mono cursor-pointer hover:text-red-300 transition-colors"
+                onClick={() => setEmail("admin@streamvault.com")}
+                title="Click to fill"
+              >admin@streamvault.com</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Password</span>
+              <span
+                className="text-red-400 font-mono cursor-pointer hover:text-red-300 transition-colors"
+                onClick={() => setPassword("admin123")}
+                title="Click to fill"
+              >admin123</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600 mt-2 text-center">Click value to auto-fill</p>
+        </div>
+
         <Card className="border-zinc-700 shadow-2xl bg-zinc-800/80 rounded-3xl transition-all duration-500 hover:shadow-3xl hover:shadow-red-500/10">
           <CardHeader className="space-y-2 text-center pb-8 pt-8">
             <CardTitle className="text-3xl font-bold text-white">{settings.loginTitle}</CardTitle>

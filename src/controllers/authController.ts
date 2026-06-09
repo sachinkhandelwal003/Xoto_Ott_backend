@@ -1,7 +1,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { storeRefreshToken } from '../lib/redis';
+import { storeRefreshToken, revokeRefreshToken } from '../lib/redis';
 import { AdminUserModel } from '../models/AdminUser';
 
 export const login = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -69,4 +69,17 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
 
 export const getMe = async (request: FastifyRequest, reply: FastifyReply) => {
   return { user: request.user };
+};
+
+export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { refreshToken } = (request.body as any) || {};
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken);
+    }
+    return reply.status(200).send({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error(error);
+    return reply.status(500).send({ error: 'Internal server error' });
+  }
 };

@@ -6,6 +6,7 @@ import usersRoutes from './users';
 import languagesRoutes from './languages';
 import promotionsRoutes from './promotions';
 import bannersRoutes from './banners';
+import settingsRoutes from './settings';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -15,6 +16,7 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(languagesRoutes, { prefix: '/languages' });
   fastify.register(promotionsRoutes);
   fastify.register(bannersRoutes);
+  fastify.register(settingsRoutes);
 };
 
 export default router;

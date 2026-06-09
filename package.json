@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development PORT=3000 tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "node ./build.mjs",
-    "start": "PORT=3000 node --enable-source-maps ./dist/index.mjs",
+    "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/seed-run.ts"
   },

@@ -1127,3 +1127,23 @@ export const useDeleteAd = () => {
     }
   });
 };
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+export const getSettings = () => api('/settings');
+
+export const updateSettings = (data: Record<string, any>) =>
+  api('/settings', { method: 'PUT', body: JSON.stringify(data) });
+
+export const useGetSettings = () =>
+  useQuery({ queryKey: ['settings'], queryFn: getSettings });
+
+export const useUpdateSettings = () => {
+  const queryClient = useQueryClient();
+  return useMutation<any, Error, Record<string, any>>({
+    mutationFn: updateSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+};
