@@ -1,0 +1,181 @@
+{
+  "info": {
+    "name": "Triple Minds API",
+    "description": "API documentation for Triple Minds app with examples for Postman",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "App Authentication",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mobileNumber\":\"9999999999\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/app/auth/send-otp",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "app", "auth", "send-otp"]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"message\": \"OTP sent successfully\", \"otp\": \"1234\"}"
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"mobileNumber\":\"9999999999\", \"otp\":\"1234\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/app/auth/verify-otp",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "app", "auth", "verify-otp"]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\", \"userId\": \"60c72b2f9b1d8e001f8e4b5a\", \"expiresIn\": 900, \"preferredLanguage\": null, \"languageSelectionSkipped\": false}"
+            }
+          ]
+        },
+        {
+          "name": "Set Preferred Language",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"language\": \"Hindi\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/app/users/:userId/language",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "app", "users", ":userId", "language"],
+              "variable": [{ "key": "userId", "value": "60c72b2f9b1d8e001f8e4b5a" }]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"message\": \"Language set successfully\", \"data\": {\"userId\": \"60c72b2f9b1d8e001f8e4b5a\", \"preferredLanguage\": \"Hindi\", \"languageSelectionSkipped\": false}}"
+            }
+          ]
+        },
+        {
+          "name": "Skip Language Selection",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {
+              "raw": "http://localhost:3000/api/app/users/:userId/language/skip",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "app", "users", ":userId", "language", "skip"],
+              "variable": [{ "key": "userId", "value": "60c72b2f9b1d8e001f8e4b5a" }]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"message\": \"Language selection skipped\", \"data\": {\"userId\": \"60c72b2f9b1d8e001f8e4b5a\", \"preferredLanguage\": null, \"languageSelectionSkipped\": true}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Languages",
+      "item": [
+        {
+          "name": "List Languages",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/languages?includeSkip=true",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "languages"],
+              "query": [{ "key": "includeSkip", "value": "true" }]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"data\": [{\"id\": \"skip\", \"name\": \"Skip\", \"code\": \"skip\", \"image\": null, \"isActive\": true, \"order\": -1, \"createdAt\": null, \"updatedAt\": null, \"isSkippable\": true}, {\"id\": \"60c72b2f9b1d8e001f8e4b5a\", \"name\": \"Hindi\", \"code\": \"hi\", \"image\": \"/uploads/languages/hindi.png\", \"isActive\": true, \"order\": 1, \"createdAt\": \"2023-06-15T10:30:00.000Z\", \"updatedAt\": \"2023-06-15T10:30:00.000Z\"}]}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Banners",
+      "item": [
+        {
+          "name": "List Banners",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/banners?admin=true",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "banners"],
+              "query": [{ "key": "admin", "value": "true" }]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"data\": [{\"id\": \"60c72b2f9b1d8e001f8e4b5a\", \"title\": \"Ameerzade ka Badla\", \"subtitle\": \"A STORY TV ORIGINAL\", \"imageUrl\": \"/uploads/banners/banner.png\", \"isActive\": true, \"content\": {\"episodeCount\": 10}}]}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Promotions",
+      "item": [
+        {
+          "name": "Get Active Promotion",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/promotions/active",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "promotions", "active"]
+            }
+          },
+          "response": [
+            {
+              "name": "Success Response",
+              "body": "{\"success\": true, \"data\": {\"title\": \"Enjoy Story TV for FREE\", \"subtitle\": \"5 Crore+ people bought the trial offer till now!\", \"features\": [{\"icon\": \"lock\", \"title\": \"Start trial\", \"description\": \"Unlock all dramas\"}]}}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    }
+  ]
+}
