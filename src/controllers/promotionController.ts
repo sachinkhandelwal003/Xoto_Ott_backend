@@ -1,11 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { PromotionModel } from '../models/Promotion';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import uploadHandler from '../lib/uploadHandler';
 
 export const listPromotions = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -104,32 +99,6 @@ export const getActivePromotion = async (request: FastifyRequest, reply: Fastify
   }
 };
 
-const saveUploadedFile = async (part: any, folder: string) => {
-  const uploadDir = path.join(__dirname, '../../uploads', folder);
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-
-  const uniqueName = `${Date.now()}-${(part.filename || 'file').replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-  const filePath = path.join(uploadDir, uniqueName);
-
-  return new Promise((resolve, reject) => {
-    const writeStream = fs.createWriteStream(filePath);
-    part.file.pipe(writeStream);
-    writeStream.on('finish', () => resolve(`/uploads/${folder}/${uniqueName}`));
-    writeStream.on('error', reject);
-  });
-};
-
-const deleteOldFile = (filePath: string) => {
-  if (filePath && filePath.startsWith('/uploads/')) {
-    const fullPath = path.join(__dirname, '../..', filePath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-    }
-  }
-};
-
 export const createPromotion = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const parts = request.parts();
@@ -160,9 +129,11 @@ export const createPromotion = async (request: FastifyRequest, reply: FastifyRep
         }
       } else if (part.type === 'file') {
         if (part.fieldname === 'thumbnailFile') {
-          data.thumbnailUrl = await saveUploadedFile(part, 'thumbnails');
+          const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'PROMOTION');
+          data.thumbnailUrl = uploadedFile.filePath;
         } else if (part.fieldname === 'videoFile') {
-          data.videoUrl = await saveUploadedFile(part, 'videos');
+          const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'VIDEO');
+          data.videoUrl = uploadedFile.filePath;
         }
       }
     }
@@ -233,13 +204,13 @@ export const updatePromotion = async (request: FastifyRequest, reply: FastifyRep
         }
       } else if (part.type === 'file') {
         if (part.fieldname === 'thumbnailFile') {
-          const thumbnailUrl = await saveUploadedFile(part, 'thumbnails');
-          deleteOldFile(existingPromotion.thumbnailUrl);
-          data.thumbnailUrl = thumbnailUrl;
+          const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'PROMOTION');
+          uploadHandler.deleteUploadedFile(existingPromotion.thumbnailUrl);
+          data.thumbnailUrl = uploadedFile.filePath;
         } else if (part.fieldname === 'videoFile') {
-          const videoUrl = await saveUploadedFile(part, 'videos');
-          deleteOldFile(existingPromotion.videoUrl);
-          data.videoUrl = videoUrl;
+          const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'VIDEO');
+          uploadHandler.deleteUploadedFile(existingPromotion.videoUrl);
+          data.videoUrl = uploadedFile.filePath;
         }
       }
     }
@@ -284,8 +255,8 @@ export const deletePromotion = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(404).send({ success: false, message: 'Promotion not found' });
     }
 
-    deleteOldFile(promotion.thumbnailUrl);
-    deleteOldFile(promotion.videoUrl);
+    uploadHandler.deleteUploadedFile(promotion.thumbnailUrl);
+    uploadHandler.deleteUploadedFile(promotion.videoUrl);
 
     return reply.status(200).send({
       success: true,
@@ -294,5 +265,34 @@ export const deletePromotion = async (request: FastifyRequest, reply: FastifyRep
   } catch (error) {
     console.error(error);
     return reply.status(500).send({ success: false, message: 'Internal server error' });
+  }
+};
+
+export const bulkDeletePromotions = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { ids } = request.body as { ids: string[] };
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.status(400).send({ success: false, message: 'Invalid or empty ids array' });
+    }
+
+    const promotions = await PromotionModel.find({ _id: { $in: ids } });
+    
+    // Delete files associated with promotions
+    promotions.forEach(promotion => {
+      uploadHandler.deleteUploadedFile(promotion.thumbnailUrl);
+      uploadHandler.deleteUploadedFile(promotion.videoUrl);
+    });
+
+    const result = await PromotionModel.deleteMany({ _id: { $in: ids } });
+
+    return {
+      success: true,
+      message: `${result.deletedCount} promotions deleted successfully`,
+      deletedCount: result.deletedCount,
+    };
+  } catch (error: any) {
+    console.error('Error bulk deleting promotions:', error);
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
   }
 };

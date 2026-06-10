@@ -9,6 +9,8 @@ import { CategoryModel } from '../models/Category';
 import { AdminUserModel } from '../models/AdminUser';
 import { ContentModel } from '../models/Content';
 import { LanguageModel } from '../models/Language';
+import { NotificationTemplateModel } from '../models/NotificationTemplate';
+import { NotificationModel } from '../models/Notification';
 
 async function seedSubscriptionPlans() {
   const count = await SubscriptionPlanModel.countDocuments();
@@ -224,6 +226,178 @@ async function seedSampleContent() {
   logger.info('Seeded sample content');
 }
 
+async function seedNotificationTemplates() {
+  const count = await NotificationTemplateModel.countDocuments();
+  if (count > 0) return;
+
+  const templates = [
+    {
+      type: 'Change Password',
+      userType: 'user',
+      recipients: ['User', 'Admin', 'Demo Admin'],
+      status: true,
+      notifSubject: 'Your Password Has Been Changed',
+      notifTemplate: 'Hello [[ user_name ]], your password has been changed successfully for your account.',
+      emailSubject: 'Password Change Successful',
+      emailTemplate: 'Hello [[ user_name ]],\n\nYour password has been changed successfully.',
+    },
+    {
+      type: 'Continue Watch',
+      userType: 'user',
+      recipients: ['User'],
+      status: true,
+      notifSubject: 'Continue Watching',
+      notifTemplate: 'Hello [[ user_name ]], continue watching "[[ movie_name ]]".',
+      emailSubject: 'Continue Watching Reminder',
+      emailTemplate: 'Hello [[ user_name ]],\n\nYou haven\'t finished watching "[[ movie_name ]]".',
+    },
+    {
+      type: 'Episode Add',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: true,
+      notifSubject: 'New Episode Added',
+      notifTemplate: 'Hello [[ user_name ]], a new episode [[ episode_name ]] has been added.',
+      emailSubject: 'New Episode Available',
+      emailTemplate: 'Hello [[ user_name ]],\n\nA new episode is now available: [[ episode_name ]].',
+    },
+    {
+      type: 'Expiry Plan',
+      userType: 'user',
+      recipients: ['User'],
+      status: true,
+      notifSubject: 'Subscription Plan Expiry Reminder',
+      notifTemplate: 'Your subscription plan "[[ plan_name ]]" will expire soon. Expiry date: [[ end_date ]].',
+      emailSubject: 'Your Subscription is Expiring Soon',
+      emailTemplate: 'Hello [[ user_name ]],\n\nYour subscription plan "[[ plan_name ]]" will expire on [[ end_date ]].',
+    },
+    {
+      type: 'Forget Email/Password',
+      userType: 'user',
+      recipients: ['User'],
+      status: true,
+      notifSubject: 'Password Reset Request',
+      notifTemplate: 'Hello [[ user_name ]], your OTP code is [[ otp_code ]].',
+      emailSubject: 'Reset Your Password',
+      emailTemplate: 'Hello [[ user_name ]],\n\nYour password reset OTP is: [[ otp_code ]].\n\nThis OTP will expire in 10 minutes.',
+    },
+    {
+      type: 'Movie Add',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: true,
+      notifSubject: 'New Movie Added',
+      notifTemplate: 'Hello [[ user_name ]], a new movie "[[ movie_name ]]" has been added.',
+      emailSubject: 'New Movie Available',
+      emailTemplate: 'Hello [[ user_name ]],\n\nA new movie "[[ movie_name ]]" is now available to watch.',
+    },
+    {
+      type: 'New Subscription',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: true,
+      notifSubject: 'Subscription Activated',
+      notifTemplate: 'Hello [[ user_name ]], your subscription to "[[ plan_name ]]" has been activated.',
+      emailSubject: 'Subscription Activated Successfully',
+      emailTemplate: 'Hello [[ user_name ]],\n\nYour [[ plan_name ]] subscription has been activated successfully.\n\nStart Date: [[ start_date ]]\nEnd Date: [[ end_date ]]',
+    },
+    {
+      type: 'Registration',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: true,
+      notifSubject: 'Welcome to StreamVault',
+      notifTemplate: 'Hello [[ user_name ]], welcome to StreamVault! Your account has been created successfully.',
+      emailSubject: 'Welcome to StreamVault',
+      emailTemplate: 'Hello [[ user_name ]],\n\nWelcome to StreamVault! Your account has been created successfully.\n\nStart exploring our vast library of content.',
+    },
+    {
+      type: 'TV Show Add',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: false,
+      notifSubject: 'New TV Show Added',
+      notifTemplate: 'Hello [[ user_name ]], a new TV show "[[ tv_show_name ]]" has been added.',
+      emailSubject: 'New TV Show Available',
+      emailTemplate: 'Hello [[ user_name ]],\n\nA new TV show "[[ tv_show_name ]]" is now available to watch.',
+    },
+    {
+      type: 'Video Add',
+      userType: 'user',
+      recipients: ['User', 'Admin'],
+      status: true,
+      notifSubject: 'New Video Added',
+      notifTemplate: 'Hello [[ user_name ]], a new video has been added.',
+      emailSubject: 'New Video Available',
+      emailTemplate: 'Hello [[ user_name ]],\n\nA new video is now available to watch.',
+    },
+  ];
+
+  await NotificationTemplateModel.insertMany(templates);
+  logger.info('Seeded notification templates');
+}
+
+async function seedNotifications() {
+  const count = await NotificationModel.countDocuments();
+  if (count > 0) return;
+
+  const notifications = [
+    {
+      title: 'Welcome to StreamVault',
+      body: 'Thank you for joining StreamVault! Start exploring our vast library of movies and TV shows.',
+      type: 'system' as const,
+      targetAudience: 'all' as const,
+      status: 'sent' as const,
+      metrics: { targetCount: 1000, sentCount: 1000, openedCount: 850, clickedCount: 420 },
+      priority: 'normal' as const,
+      sentAt: new Date(Date.now() - 86400000 * 7),
+    },
+    {
+      title: 'New Movie: Neon Prophecy',
+      body: 'A new sci-fi thriller "Neon Prophecy" is now available to watch. Don\'t miss it!',
+      type: 'content_release' as const,
+      targetAudience: 'all' as const,
+      status: 'sent' as const,
+      metrics: { targetCount: 5000, sentCount: 5000, openedCount: 3200, clickedCount: 1800 },
+      priority: 'high' as const,
+      sentAt: new Date(Date.now() - 86400000 * 3),
+    },
+    {
+      title: 'Subscription Expiring Soon',
+      body: 'Your subscription plan will expire in 3 days. Renew now to continue enjoying premium content.',
+      type: 'subscription' as const,
+      targetAudience: 'premium' as const,
+      status: 'sent' as const,
+      metrics: { targetCount: 200, sentCount: 200, openedCount: 180, clickedCount: 120 },
+      priority: 'high' as const,
+      sentAt: new Date(Date.now() - 86400000 * 1),
+    },
+    {
+      title: 'Special Offer: 50% Off Annual Plan',
+      body: 'Limited time offer! Get 50% off on our annual subscription plan. Valid until end of month.',
+      type: 'promotional' as const,
+      targetAudience: 'free' as const,
+      status: 'sent' as const,
+      metrics: { targetCount: 3000, sentCount: 3000, openedCount: 1500, clickedCount: 600 },
+      priority: 'normal' as const,
+      sentAt: new Date(Date.now() - 86400000 * 5),
+    },
+    {
+      title: 'Continue Watching: The Last Heist',
+      body: 'You haven\'t finished watching "The Last Heist". Continue where you left off!',
+      type: 'reminder' as const,
+      targetAudience: 'all' as const,
+      status: 'sent' as const,
+      metrics: { targetCount: 500, sentCount: 500, openedCount: 300, clickedCount: 200 },
+      priority: 'low' as const,
+      sentAt: new Date(Date.now() - 86400000 * 2),
+    },
+  ];
+
+  await NotificationModel.insertMany(notifications);
+  logger.info('Seeded notifications');
+}
+
 export async function seedDatabase(): Promise<void> {
   try {
     await Promise.all([
@@ -232,6 +406,8 @@ export async function seedDatabase(): Promise<void> {
       seedLanguages(),
       seedAdminUsers(),
       seedSampleContent(),
+      seedNotificationTemplates(),
+      seedNotifications(),
     ]);
     logger.info('Database seeding complete');
   } catch (err) {

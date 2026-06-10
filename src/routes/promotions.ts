@@ -6,6 +6,7 @@ import {
   createPromotion,
   updatePromotion,
   deletePromotion,
+  bulkDeletePromotions,
 } from '../controllers/promotionController';
 
 const promotionsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -15,6 +16,7 @@ const promotionsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/promotions', createPromotion);
   fastify.put('/promotions/:id', updatePromotion);
   fastify.delete('/promotions/:id', deletePromotion);
+  fastify.post('/promotions/bulk-delete', bulkDeletePromotions);
 };
 
 export default promotionsRoutes;

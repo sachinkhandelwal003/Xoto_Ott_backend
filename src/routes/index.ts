@@ -7,6 +7,19 @@ import languagesRoutes from './languages';
 import promotionsRoutes from './promotions';
 import bannersRoutes from './banners';
 import settingsRoutes from './settings';
+import genresRoutes from './genres';
+import pagesRoutes from './pages';
+import faqsRoutes from './faqs';
+import actorsRoutes from './actors';
+import directorsRoutes from './directors';
+import notificationLogsRoutes from './notificationLogs';
+import subscriptionPlansRoutes from './subscriptionPlans';
+import planLimitsRoutes from './planLimits';
+import subscriptionRoutes from './subscriptions';
+import categoriesRoutes from './categories';
+import notificationTemplatesRoutes from './notificationTemplates';
+import mediaRoutes from './media';
+import appSettingsRoutes from './appSettings';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -17,6 +30,19 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(promotionsRoutes);
   fastify.register(bannersRoutes);
   fastify.register(settingsRoutes);
+  fastify.register(genresRoutes, { prefix: '/genres' });
+  fastify.register(pagesRoutes, { prefix: '/pages' });
+  fastify.register(faqsRoutes, { prefix: '/faqs' });
+  fastify.register(actorsRoutes, { prefix: '/actors' });
+  fastify.register(directorsRoutes, { prefix: '/directors' });
+  fastify.register(notificationLogsRoutes, { prefix: '/notification-logs' });
+  fastify.register(subscriptionPlansRoutes, { prefix: '/subscription-plans' });
+  fastify.register(planLimitsRoutes, { prefix: '/plan-limits' });
+  fastify.register(subscriptionRoutes);
+  fastify.register(categoriesRoutes, { prefix: '/categories' });
+  fastify.register(notificationTemplatesRoutes, { prefix: '/notification-templates' });
+  fastify.register(mediaRoutes, { prefix: '/media' });
+  fastify.register(appSettingsRoutes, { prefix: '/app-settings' });
 };
 
 export default router;

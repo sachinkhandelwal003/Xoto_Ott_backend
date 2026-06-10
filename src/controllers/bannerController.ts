@@ -7,6 +7,7 @@ import { Types } from 'mongoose';
 import { BannerModel } from '../models/Banner';
 import { ContentModel } from '../models/Content';
 import { EpisodeModel } from '../models/Episode';
+import uploadHandler from '../lib/uploadHandler';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,27 +91,6 @@ const ensureDefaultBannerImage = () => {
   }
 
   return `/uploads/banners/${fileName}`;
-};
-
-const deleteOldFile = (filePath?: string) => {
-  if (!filePath || !filePath.startsWith('/uploads/')) return;
-  const fullPath = path.join(__dirname, '../..', filePath);
-  if (fs.existsSync(fullPath)) {
-    fs.unlinkSync(fullPath);
-  }
-};
-
-const saveUploadedFile = async (part: any, folder: string): Promise<string> => {
-  ensureDir(path.join(uploadsRoot, folder));
-  const uniqueName = `${Date.now()}-${(part.filename || 'file').replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-  const filePath = path.join(uploadsRoot, folder, uniqueName);
-
-  return new Promise((resolve, reject) => {
-    const writeStream = fs.createWriteStream(filePath);
-    part.file.pipe(writeStream);
-    writeStream.on('finish', () => resolve(`/uploads/${folder}/${uniqueName}`));
-    writeStream.on('error', reject);
-  });
 };
 
 const toLocalUploadPath = (fileUrl: string): string | undefined => {
@@ -396,9 +376,18 @@ const readBannerMultipart = async (request: FastifyRequest): Promise<BannerMulti
       if (part.fieldname === 'bannerImage') data.thumbnail = part.value as string;
       if (part.fieldname === 'videoUrl') data.videoUrl = part.value as string;
     } else if (part.type === 'file') {
-      if (part.fieldname === 'thumbnailFile') data.thumbnail = await saveUploadedFile(part, 'thumbnails');
-      if (part.fieldname === 'bannerFile') data.thumbnail = await saveUploadedFile(part, 'thumbnails');
-      if (part.fieldname === 'videoFile') data.videoUrl = await saveUploadedFile(part, 'videos');
+      if (part.fieldname === 'thumbnailFile') {
+        const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'BANNER');
+        data.thumbnail = uploadedFile.filePath;
+      }
+      if (part.fieldname === 'bannerFile') {
+        const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'BANNER');
+        data.thumbnail = uploadedFile.filePath;
+      }
+      if (part.fieldname === 'videoFile') {
+        const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'VIDEO');
+        data.videoUrl = uploadedFile.filePath;
+      }
     }
   }
 
@@ -723,11 +712,11 @@ export const updateBanner = async (request: FastifyRequest, reply: FastifyReply)
     }
 
     if (data.thumbnail && existingBanner.imageUrl !== data.thumbnail) {
-      deleteOldFile(existingBanner.imageUrl);
+      uploadHandler.deleteUploadedFile(existingBanner.imageUrl);
     }
 
     if (data.thumbnail && existingContent?.thumbnail && existingContent.thumbnail !== data.thumbnail) {
-      deleteOldFile(existingContent.thumbnail);
+      uploadHandler.deleteUploadedFile(existingContent.thumbnail);
     }
 
     const banner = await BannerModel.findById(bannerId).populate('contentId').lean();
@@ -783,7 +772,7 @@ export const deleteBanner = async (request: FastifyRequest, reply: FastifyReply)
     }
 
     for (const filePath of Array.from(filesToDelete)) {
-      deleteOldFile(filePath);
+      uploadHandler.deleteUploadedFile(filePath);
     }
 
     return {

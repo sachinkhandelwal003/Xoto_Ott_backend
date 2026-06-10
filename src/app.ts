@@ -38,7 +38,8 @@ fastify.register(fastifyMultipart as any, {
   limits: {
     fileSize: 2000 * 1024 * 1024, // 2GB
     files: 10 // Max files per request
-  }
+  },
+  attachFieldsToBody: true
 });
 
 // Register Static file serving

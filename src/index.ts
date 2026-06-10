@@ -12,6 +12,7 @@ import fastify from './app';
 import { logger } from './lib/logger';
 import { connectMongoDB } from './lib/mongodb';
 import { connectRedis } from './lib/redis';
+import { seedDatabase } from './lib/seed';
 
 const rawPort = process.env.PORT;
 
@@ -28,6 +29,9 @@ if (Number.isNaN(port) || port <= 0) {
 async function startServer() {
   try {
     await Promise.all([connectMongoDB(), connectRedis()]);
+
+    // Seed database with initial data
+    await seedDatabase();
 
     await fastify.listen({ port, host: '0.0.0.0' });
     logger.info({ port }, 'Server listening');
