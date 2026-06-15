@@ -105,9 +105,9 @@ export const deleteFolder = async (request: FastifyRequest, reply: FastifyReply)
 
     const files = await MediaFileModel.find({ folder: id });
 
-    // Delete files from disk
+    // Delete files from storage
     for (const file of files) {
-      uploadHandler.deleteUploadedFile(file.filePath);
+      await uploadHandler.deleteUploadedFile(file.s3Key || file.filePath, file.storageType);
     }
 
     // Delete files from DB
@@ -153,16 +153,23 @@ export const getFilesByFolder = async (request: FastifyRequest, reply: FastifyRe
 
     const files = await MediaFileModel.find({ folder: id }).sort({ createdAt: -1 }).lean();
     const filesWithSize = files.map((file) => {
-      const normalizedPath = ensureUploadPath(file.filePath);
-      const protocol = request.protocol;
-      const host = request.headers.host;
-      const normalizedUrl = `${protocol}://${host}${normalizedPath}`;
+      let fileUrl = file.url;
+      let filePath = file.filePath;
+      
+      if (file.storageType !== 's3') {
+        const normalizedPath = ensureUploadPath(file.filePath);
+        const protocol = request.protocol;
+        const host = request.headers.host;
+        fileUrl = `${protocol}://${host}${normalizedPath}`;
+        filePath = normalizedPath;
+      }
+      
       return {
         _id: file._id,
         id: file._id.toString(),
         name: file.name,
-        url: normalizedUrl,
-        filePath: normalizedPath,
+        url: fileUrl,
+        filePath: filePath,
         size: uploadHandler.formatFileSize(file.fileSize),
         fileSize: file.fileSize,
         fileType: file.fileType,
@@ -170,6 +177,7 @@ export const getFilesByFolder = async (request: FastifyRequest, reply: FastifyRe
         source: file.source,
         sourceId: file.sourceId?.toString(),
         storageType: file.storageType,
+        s3Key: file.s3Key,
       };
     });
 
@@ -214,16 +222,23 @@ export const getAllMediaFiles = async (request: FastifyRequest, reply: FastifyRe
     ]);
 
     const filesWithSize = files.map((file) => {
-      const normalizedPath = ensureUploadPath(file.filePath);
-      const protocol = request.protocol;
-      const host = request.headers.host;
-      const normalizedUrl = `${protocol}://${host}${normalizedPath}`;
+      let fileUrl = file.url;
+      let filePath = file.filePath;
+      
+      if (file.storageType !== 's3') {
+        const normalizedPath = ensureUploadPath(file.filePath);
+        const protocol = request.protocol;
+        const host = request.headers.host;
+        fileUrl = `${protocol}://${host}${normalizedPath}`;
+        filePath = normalizedPath;
+      }
+      
       return {
         _id: file._id,
         id: file._id.toString(),
         name: file.name,
-        url: normalizedUrl,
-        filePath: normalizedPath,
+        url: fileUrl,
+        filePath: filePath,
         size: uploadHandler.formatFileSize(file.fileSize),
         fileSize: file.fileSize,
         fileType: file.fileType,
@@ -231,6 +246,7 @@ export const getAllMediaFiles = async (request: FastifyRequest, reply: FastifyRe
         source: file.source,
         sourceId: file.sourceId?.toString(),
         storageType: file.storageType,
+        s3Key: file.s3Key,
         createdAt: file.createdAt,
       };
     });
@@ -307,8 +323,8 @@ export const deleteFile = async (request: FastifyRequest, reply: FastifyReply) =
       return reply.status(404).send({ success: false, error: 'File not found' });
     }
 
-    // Delete file from disk
-    uploadHandler.deleteUploadedFile(file.filePath);
+    // Delete file from storage
+    await uploadHandler.deleteUploadedFile(file.s3Key || file.filePath, file.storageType);
 
     // Delete from DB
     await MediaFileModel.findByIdAndDelete(id);

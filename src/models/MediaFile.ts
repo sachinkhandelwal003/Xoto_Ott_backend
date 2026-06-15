@@ -10,6 +10,7 @@ export interface IMediaFile extends Document {
   source?: string; // e.g., 'banner', 'show', 'media-library', 'category', 'genre', etc.
   sourceId?: mongoose.Types.ObjectId; // Reference to the entity that owns this file
   storageType: 'local' | 's3'; // Track storage type
+  s3Key?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ const MediaFileSchema = new Schema<IMediaFile>(
     source: { type: String, required: false }, // e.g., 'banner', 'show', 'media-library', etc.
     sourceId: { type: Schema.Types.ObjectId, required: false }, // Reference to the entity
     storageType: { type: String, enum: ['local', 's3'], default: 'local', required: true },
+    s3Key: { type: String, required: false },
   },
   { timestamps: true }
 );

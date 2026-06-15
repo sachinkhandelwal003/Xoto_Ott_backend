@@ -4,14 +4,13 @@ import { fileURLToPath } from 'url';
 import type { FastifyRequest } from 'fastify';
 import { MediaFileModel } from '../models/MediaFile';
 import { Types } from 'mongoose';
+import { uploadToS3, deleteFromS3, isS3Configured } from './s3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Base upload directory
 const UPLOADS_ROOT = path.join(__dirname, '../../uploads');
 
-// Define allowed file types with their allowed extensions and directories
 export const UPLOAD_TYPES = {
   IMAGE: {
     name: 'image',
@@ -85,15 +84,15 @@ export type UploadType = keyof typeof UPLOAD_TYPES;
 export interface UploadedFileInfo {
   originalName: string;
   fileName: string;
-  filePath: string; // path with /uploads/ prefix, e.g. /uploads/categories/xxx.jpg
-  url: string; // full URL, e.g. http://localhost:3000/uploads/categories/xxx.jpg
-  fileSize: number; // in bytes
+  filePath: string;
+  url: string;
+  fileSize: number;
   mimeType: string;
   uploadType: UploadType;
   storageType?: 'local' | 's3';
+  s3Key?: string;
 }
 
-// Ensure upload directory exists
 export const ensureUploadDir = (dirPath: string) => {
   const fullPath = path.join(UPLOADS_ROOT, dirPath);
   if (!fs.existsSync(fullPath)) {
@@ -102,7 +101,6 @@ export const ensureUploadDir = (dirPath: string) => {
   return fullPath;
 };
 
-// Generate a unique filename
 export const generateUniqueFileName = (originalName: string): string => {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 10);
@@ -115,14 +113,12 @@ export const generateUniqueFileName = (originalName: string): string => {
   return `${timestamp}-${randomString}${baseName ? `-${baseName}` : ''}${ext}`;
 };
 
-// Validate file type
 export const validateFileType = (fileName: string, uploadType: UploadType): boolean => {
   const typeConfig = UPLOAD_TYPES[uploadType];
   const ext = path.extname(fileName).toLowerCase();
   return (typeConfig.allowedExts as readonly string[]).includes(ext);
 };
 
-// Save a single file part from Fastify request
 export const saveFileFromPart = async (
   part: any,
   request: FastifyRequest,
@@ -137,82 +133,126 @@ export const saveFileFromPart = async (
 ): Promise<UploadedFileInfo> => {
   const typeConfig = UPLOAD_TYPES[uploadType];
   const targetDir = customDir || typeConfig.defaultDir;
+  const useS3 = await isS3Configured();
 
-  // Ensure directory exists
-  ensureUploadDir(targetDir);
-
-  // Validate file type
   if (!validateFileType(part.filename, uploadType)) {
     throw new Error(
       `Invalid file type for ${typeConfig.name}. Allowed types: ${typeConfig.allowedExts.join(', ')}`
     );
   }
 
-  // Generate unique filename
   const fileName = generateUniqueFileName(part.filename);
-  const relativeFilePath = path.join(targetDir, fileName);
-  const fullFilePath = path.join(UPLOADS_ROOT, relativeFilePath);
+  const s3Key = targetDir ? `${targetDir}/${fileName}` : fileName;
 
-  // Save file to disk
-  return new Promise(async (resolve, reject) => {
-    const writeStream = fs.createWriteStream(fullFilePath);
-    part.file.pipe(writeStream);
+  if (useS3) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of part.file) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    const publicUrl = await uploadToS3(s3Key, buffer, part.mimetype || 'application/octet-stream');
 
-    writeStream.on('finish', async () => {
-      const stats = fs.statSync(fullFilePath);
-      const protocol = request.protocol;
-      const host = request.headers.host;
-      const baseUrl = `${protocol}://${host}`;
+    const fileInfo: UploadedFileInfo = {
+      originalName: part.filename,
+      fileName,
+      filePath: s3Key,
+      url: publicUrl,
+      fileSize: buffer.length,
+      mimeType: part.mimetype || 'application/octet-stream',
+      uploadType,
+      storageType: 's3',
+      s3Key,
+    };
 
-      const fileInfo: UploadedFileInfo = {
-        originalName: part.filename,
-        fileName,
-        filePath: `/uploads/${relativeFilePath.replace(/\\/g, '/')}`,
-        url: `${baseUrl}/uploads/${relativeFilePath.replace(/\\/g, '/')}`,
-        fileSize: stats.size,
-        mimeType: part.mimetype || 'application/octet-stream',
-        uploadType,
-        storageType: 'local'
-      };
-
-      // Track in media library if enabled
-      if (options?.trackInMediaLibrary !== false) {
-        try {
-          await MediaFileModel.create({
-            name: part.filename,
-            url: fileInfo.url,
-            filePath: fileInfo.filePath,
-            fileSize: stats.size,
-            fileType: part.mimetype || 'application/octet-stream',
-            folder: options?.folderId ? new Types.ObjectId(options.folderId) : undefined,
-            source: options?.source || uploadType.toLowerCase(),
-            sourceId: options?.sourceId ? new Types.ObjectId(options.sourceId) : undefined,
-            storageType: 'local'
-          });
-        } catch (error) {
-          // Log error but don't fail the upload
-          console.error('Failed to track file in media library:', error);
-        }
+    if (options?.trackInMediaLibrary !== false) {
+      try {
+        await MediaFileModel.create({
+          name: part.filename,
+          url: fileInfo.url,
+          filePath: fileInfo.filePath,
+          fileSize: buffer.length,
+          fileType: part.mimetype || 'application/octet-stream',
+          folder: options?.folderId ? new Types.ObjectId(options.folderId) : undefined,
+          source: options?.source || uploadType.toLowerCase(),
+          sourceId: options?.sourceId ? new Types.ObjectId(options.sourceId) : undefined,
+          storageType: 's3',
+          s3Key,
+        });
+      } catch (error) {
+        console.error('Failed to track file in media library:', error);
       }
+    }
 
-      resolve(fileInfo);
+    return fileInfo;
+  } else {
+    ensureUploadDir(targetDir);
+    const relativeFilePath = path.join(targetDir, fileName);
+    const fullFilePath = path.join(UPLOADS_ROOT, relativeFilePath);
+
+    return new Promise(async (resolve, reject) => {
+      const writeStream = fs.createWriteStream(fullFilePath);
+      part.file.pipe(writeStream);
+
+      writeStream.on('finish', async () => {
+        const stats = fs.statSync(fullFilePath);
+        const protocol = request.protocol;
+        const host = request.headers.host;
+        const baseUrl = `${protocol}://${host}`;
+
+        const fileInfo: UploadedFileInfo = {
+          originalName: part.filename,
+          fileName,
+          filePath: `/uploads/${relativeFilePath.replace(/\\/g, '/')}`,
+          url: `${baseUrl}/uploads/${relativeFilePath.replace(/\\/g, '/')}`,
+          fileSize: stats.size,
+          mimeType: part.mimetype || 'application/octet-stream',
+          uploadType,
+          storageType: 'local'
+        };
+
+        if (options?.trackInMediaLibrary !== false) {
+          try {
+            await MediaFileModel.create({
+              name: part.filename,
+              url: fileInfo.url,
+              filePath: fileInfo.filePath,
+              fileSize: stats.size,
+              fileType: part.mimetype || 'application/octet-stream',
+              folder: options?.folderId ? new Types.ObjectId(options.folderId) : undefined,
+              source: options?.source || uploadType.toLowerCase(),
+              sourceId: options?.sourceId ? new Types.ObjectId(options.sourceId) : undefined,
+              storageType: 'local'
+            });
+          } catch (error) {
+            console.error('Failed to track file in media library:', error);
+          }
+        }
+
+        resolve(fileInfo);
+      });
+
+      writeStream.on('error', reject);
     });
-
-    writeStream.on('error', reject);
-  });
-};
-
-// Delete a file from disk
-export const deleteUploadedFile = (relativeFilePath: string) => {
-  if (!relativeFilePath) return;
-  
-  const fullPath = path.join(UPLOADS_ROOT, relativeFilePath.replace(/^\/*uploads\//, '').replace(/^\/+/, ''));
-  if (fs.existsSync(fullPath)) {
-    fs.unlinkSync(fullPath);
   }
 };
 
-// Get file size in human-readable format
+export const deleteUploadedFile = async (relativeFilePath: string, storageType?: 'local' | 's3') => {
+  if (!relativeFilePath) return;
+  
+  const s3Configured = await isS3Configured();
+  
+  if (storageType === 's3' || s3Configured) {
+    await deleteFromS3(relativeFilePath.replace(/^\/*uploads\//, ''));
+  }
+
+  if (storageType === 'local' || !s3Configured) {
+    const fullPath = path.join(UPLOADS_ROOT, relativeFilePath.replace(/^\/*uploads\//, '').replace(/^\/+/, ''));
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  }
+};
+
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;

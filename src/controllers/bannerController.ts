@@ -351,8 +351,8 @@ const createEpisodeSlices = async ({
   return createdEpisodes;
 };
 
-const readBannerMultipart = async (request: FastifyRequest): Promise<BannerMultipartData> => {
-  const data: BannerMultipartData = {};
+const readBannerMultipart = async (request: FastifyRequest): Promise<BannerMultipartData & { thumbnailFilePath?: string; videoFilePath?: string }> => {
+  const data: BannerMultipartData & { thumbnailFilePath?: string; videoFilePath?: string } = {};
 
   for await (const part of request.parts()) {
     if (part.type === 'field') {
@@ -378,15 +378,18 @@ const readBannerMultipart = async (request: FastifyRequest): Promise<BannerMulti
     } else if (part.type === 'file') {
       if (part.fieldname === 'thumbnailFile') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'BANNER');
-        data.thumbnail = uploadedFile.filePath;
+        data.thumbnail = uploadedFile.url;
+        data.thumbnailFilePath = uploadedFile.filePath;
       }
       if (part.fieldname === 'bannerFile') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'BANNER');
-        data.thumbnail = uploadedFile.filePath;
+        data.thumbnail = uploadedFile.url;
+        data.thumbnailFilePath = uploadedFile.filePath;
       }
       if (part.fieldname === 'videoFile') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request as any, 'VIDEO');
-        data.videoUrl = uploadedFile.filePath;
+        data.videoUrl = uploadedFile.url;
+        data.videoFilePath = uploadedFile.filePath;
       }
     }
   }
@@ -712,11 +715,11 @@ export const updateBanner = async (request: FastifyRequest, reply: FastifyReply)
     }
 
     if (data.thumbnail && existingBanner.imageUrl !== data.thumbnail) {
-      uploadHandler.deleteUploadedFile(existingBanner.imageUrl);
+      await uploadHandler.deleteUploadedFile(existingBanner.imageUrl);
     }
 
     if (data.thumbnail && existingContent?.thumbnail && existingContent.thumbnail !== data.thumbnail) {
-      uploadHandler.deleteUploadedFile(existingContent.thumbnail);
+      await uploadHandler.deleteUploadedFile(existingContent.thumbnail);
     }
 
     const banner = await BannerModel.findById(bannerId).populate('contentId').lean();
@@ -772,7 +775,7 @@ export const deleteBanner = async (request: FastifyRequest, reply: FastifyReply)
     }
 
     for (const filePath of Array.from(filesToDelete)) {
-      uploadHandler.deleteUploadedFile(filePath);
+      await uploadHandler.deleteUploadedFile(filePath);
     }
 
     return {
