@@ -1,0 +1,282 @@
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { MovieModel } from '../models/Movie';
+import { logger } from '../lib/logger';
+
+// Get all movies with pagination and filtering
+export const getAllMovies = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const query = request.query as {
+      page?: string;
+      limit?: string;
+      search?: string;
+      status?: string;
+      genre?: string;
+      category?: string;
+      language?: string;
+      featured?: string;
+      trending?: string;
+      year?: string;
+    };
+
+    const page = Math.max(1, Number(query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(query.limit || 20)));
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+
+    if (query.status) filter.status = query.status;
+    if (query.featured === 'true') filter.featured = true;
+    if (query.trending === 'true') filter.trending = true;
+    if (query.year) filter.year = Number(query.year);
+    if (query.genre) filter.genres = query.genre;
+    if (query.category) filter.categories = query.category;
+    if (query.language) filter.languages = query.language;
+
+    if (query.search) {
+      filter.$or = [
+        { title: new RegExp(query.search, 'i') },
+        { description: new RegExp(query.search, 'i') },
+        { tags: new RegExp(query.search, 'i') },
+      ];
+    }
+
+    const [movies, total] = await Promise.all([
+      MovieModel.find(filter)
+        .populate('genres', 'name image')
+        .populate('categories', 'name thumbnail')
+        .populate('languages', 'name')
+        .populate('subtitleLanguages', 'name')
+        .populate('audioLanguages', 'name')
+        .populate('cast.actor', 'name image')
+        .populate('crew.director', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      MovieModel.countDocuments(filter),
+    ]);
+
+    const moviesWithId = movies.map((movie) => ({
+      ...movie,
+      id: movie._id?.toString(),
+    }));
+
+    return reply.send({
+      success: true,
+      data: moviesWithId,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error getting all movies');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Get single movie by ID
+export const getMovieById = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+
+    const movie = await MovieModel.findById(id)
+      .populate('genres', 'name image')
+      .populate('categories', 'name thumbnail bannerImage')
+      .populate('languages', 'name')
+      .populate('subtitleLanguages', 'name')
+      .populate('audioLanguages', 'name')
+      .populate('cast.actor', 'name image designation')
+      .populate('crew.director', 'name designation')
+      .lean();
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        ...movie,
+        id: movie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error getting movie by ID');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Create new movie
+export const createMovie = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const body = request.body as any;
+
+    const movie = await MovieModel.create(body);
+
+    return reply.status(201).send({
+      success: true,
+      data: {
+        ...movie.toObject(),
+        id: movie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error creating movie');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Update movie by ID
+export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+    const body = request.body as any;
+
+    const movie = await MovieModel.findByIdAndUpdate(
+      id,
+      { $set: body },
+      { new: true, runValidators: true }
+    )
+      .populate('genres', 'name image')
+      .populate('categories', 'name thumbnail')
+      .populate('languages', 'name')
+      .populate('subtitleLanguages', 'name')
+      .populate('audioLanguages', 'name')
+      .populate('cast.actor', 'name image')
+      .populate('crew.director', 'name')
+      .lean();
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        ...movie,
+        id: movie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error updating movie');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Delete movie by ID
+export const deleteMovie = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+
+    const movie = await MovieModel.findByIdAndDelete(id);
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    return reply.send({ success: true, message: 'Movie deleted successfully' });
+  } catch (error: any) {
+    logger.error({ error }, 'Error deleting movie');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Update movie status
+export const updateMovieStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+    const { status, rejectionReason } = request.body as {
+      status: 'published' | 'draft' | 'processing' | 'moderation' | 'rejected';
+      rejectionReason?: string;
+    };
+
+    const updateData: any = { status };
+    if (rejectionReason && status === 'rejected') {
+      updateData.rejectionReason = rejectionReason;
+    }
+
+    const movie = await MovieModel.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        ...movie,
+        id: movie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error updating movie status');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Toggle featured status
+export const toggleFeatured = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+
+    const movie = await MovieModel.findById(id).lean();
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    const updatedMovie = await MovieModel.findByIdAndUpdate(
+      id,
+      { $set: { featured: !movie.featured } },
+      { new: true }
+    ).lean();
+
+    return reply.send({
+      success: true,
+      data: {
+        ...updatedMovie,
+        id: updatedMovie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error toggling featured status');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Toggle trending status
+export const toggleTrending = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+
+    const movie = await MovieModel.findById(id).lean();
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    const updatedMovie = await MovieModel.findByIdAndUpdate(
+      id,
+      { $set: { trending: !movie.trending } },
+      { new: true }
+    ).lean();
+
+    return reply.send({
+      success: true,
+      data: {
+        ...updatedMovie,
+        id: updatedMovie._id?.toString(),
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error toggling trending status');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
