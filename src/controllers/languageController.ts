@@ -90,6 +90,7 @@ export const createLanguage = async (request: FastifyRequest, reply: FastifyRepl
       if (part.type === 'field') {
         if (part.fieldname === 'name') name = part.value as string;
         if (part.fieldname === 'code') code = part.value as string;
+        if (part.fieldname === 'image') imagePath = part.value as string;
       } else if (part.type === 'file') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'LANGUAGE');
         imagePath = uploadedFile.filePath;
@@ -147,6 +148,7 @@ export const updateLanguage = async (request: FastifyRequest, reply: FastifyRepl
         if (part.fieldname === 'code') updateData.code = part.value;
         if (part.fieldname === 'isActive') updateData.isActive = part.value === 'true';
         if (part.fieldname === 'order') updateData.order = parseInt(part.value as string);
+        if (part.fieldname === 'image') updateData.image = part.value;
       } else if (part.type === 'file') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'LANGUAGE');
         updateData.image = uploadedFile.filePath;

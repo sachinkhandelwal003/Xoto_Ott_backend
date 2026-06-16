@@ -12,6 +12,7 @@ const readGenreMultipart = async (request: FastifyRequest): Promise<any> => {
       if (part.fieldname === 'name') data.name = part.value as string;
       if (part.fieldname === 'description') data.description = part.value as string;
       if (part.fieldname === 'active') data.active = part.value === 'true';
+      if (part.fieldname === 'image') data.image = part.value as string;
     } else if (part.type === 'file') {
       if (part.fieldname === 'imageFile') {
         const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'GENRE');

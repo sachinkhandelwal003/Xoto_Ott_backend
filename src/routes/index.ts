@@ -22,6 +22,7 @@ import mediaRoutes from './media';
 import appSettingsRoutes from './appSettings';
 import dashboardRoutes from './dashboard';
 import movieRoutes from './movie';
+import adminUsersRoutes from './adminUsers';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -47,6 +48,7 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(appSettingsRoutes, { prefix: '/app-settings' });
   fastify.register(dashboardRoutes);
   fastify.register(movieRoutes, { prefix: '/movies' });
+  fastify.register(adminUsersRoutes, { prefix: '/admin-users' });
 };
 
 export default router;

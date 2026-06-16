@@ -68,7 +68,17 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
 };
 
 export const getMe = async (request: FastifyRequest, reply: FastifyReply) => {
-  return { user: request.user };
+  try {
+    const userId = (request.user as any).id;
+    const admin = await AdminUserModel.findById(userId).select('-passwordHash').lean();
+    if (!admin) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+    return { user: admin };
+  } catch (error) {
+    console.error(error);
+    return reply.status(500).send({ error: 'Internal server error' });
+  }
 };
 
 export const logout = async (request: FastifyRequest, reply: FastifyReply) => {

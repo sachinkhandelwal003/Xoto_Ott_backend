@@ -136,8 +136,8 @@ async function seedAdminUsers() {
 
   const admins = [
     {
-      email: 'admin@streamvault.com',
-      name: 'StreamVault Admin',
+      email: 'admin@streamit.com',
+      name: 'Admin User',
       passwordHash: hash1,
       role: 'superadmin' as const,
       isActive: true,

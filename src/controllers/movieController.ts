@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { MovieModel } from '../models/Movie';
 import { logger } from '../lib/logger';
+import { sendApprovalEmail, sendRejectionEmail } from '../lib/email';
 
 // Get all movies with pagination and filtering
 export const getAllMovies = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -166,7 +167,127 @@ export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) 
   }
 };
 
-// Delete movie by ID
+// Approve movie
+export const approveMovie = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+    const currentUser = (request as any).user;
+
+    const movie = await MovieModel.findByIdAndUpdate(
+      id,
+      {
+        status: 'published',
+        approvedBy: currentUser?.id,
+        approvedAt: new Date(),
+        rejectionReason: undefined,
+      },
+      { new: true }
+    ).populate('createdBy', 'name email');
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    // Send approval email to creator
+    if (movie.createdBy) {
+      const creator = movie.createdBy as any;
+      if (creator.email) {
+        await sendApprovalEmail(
+          creator.email,
+          creator.name || 'User',
+          'Movie',
+          movie.title
+        );
+      }
+    }
+
+    return reply.send({ success: true, data: movie });
+  } catch (error: any) {
+    logger.error({ error }, 'Error approving movie');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Reject movie
+export const rejectMovie = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.params as { id: string };
+    const { reason } = request.body as { reason?: string };
+    const currentUser = (request as any).user;
+
+    const movie = await MovieModel.findByIdAndUpdate(
+      id,
+      {
+        status: 'rejected',
+        rejectedBy: currentUser?.id,
+        rejectedAt: new Date(),
+        rejectionReason: reason,
+      },
+      { new: true }
+    ).populate('createdBy', 'name email');
+
+    if (!movie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    // Send rejection email to creator
+    if (movie.createdBy) {
+      const creator = movie.createdBy as any;
+      if (creator.email) {
+        await sendRejectionEmail(
+          creator.email,
+          creator.name || 'User',
+          'Movie',
+          movie.title,
+          reason || 'No reason provided'
+        );
+      }
+    }
+
+    return reply.send({ success: true, data: movie });
+  } catch (error: any) {
+    logger.error({ error }, 'Error rejecting movie');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Get pending approvals
+export const getPendingApprovals = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const query = request.query as {
+      page?: string;
+      limit?: string;
+      type?: string;
+    };
+
+    const page = Math.max(1, Number(query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(query.limit || 20)));
+    const skip = (page - 1) * limit;
+
+    const filter: any = { status: 'moderation' };
+
+    const [movies, total] = await Promise.all([
+      MovieModel.find(filter)
+        .populate('createdBy', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      MovieModel.countDocuments(filter),
+    ]);
+
+    return reply.send({
+      success: true,
+      data: movies,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error getting pending approvals');
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+// Get movie by ID
 export const deleteMovie = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { id } = request.params as { id: string };

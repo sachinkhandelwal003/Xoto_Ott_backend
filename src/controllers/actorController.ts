@@ -13,6 +13,7 @@ const readActorMultipart = async (request: FastifyRequest) => {
       if (part.fieldname === 'dateOfBirth') data.dateOfBirth = part.value;
       if (part.fieldname === 'birthPlace') data.birthPlace = part.value;
       if (part.fieldname === 'status') data.status = part.value === 'true';
+      if (part.fieldname === 'image') data.image = part.value;
     } else if (part.type === 'file' && part.fieldname === 'imageFile') {
       const uploadedFile = await uploadHandler.saveFileFromPart(part, request, 'ACTOR');
       data.image = uploadedFile.filePath;

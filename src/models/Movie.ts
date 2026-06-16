@@ -21,6 +21,11 @@ export interface IMovie extends Document {
   releaseDate?: Date;
   status: 'published' | 'draft' | 'processing' | 'moderation' | 'rejected';
   rejectionReason?: string;
+  approvedBy?: mongoose.Types.ObjectId;
+  approvedAt?: Date;
+  rejectedBy?: mongoose.Types.ObjectId;
+  rejectedAt?: Date;
+  createdBy?: mongoose.Types.ObjectId;
   hlsUrl?: string;
   videoQualities?: Array<{
     quality: '144p' | '360p' | '480p' | '720p' | '1080p' | '4k';
@@ -85,6 +90,11 @@ const MovieSchema = new Schema<IMovie>(
       index: true,
     },
     rejectionReason: String,
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },
+    approvedAt: Date,
+    rejectedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },
+    rejectedAt: Date,
+    createdBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },
     hlsUrl: String,
     videoQualities: [
       {
