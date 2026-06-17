@@ -27,6 +27,7 @@ import sectionsRoutes from './sections';
 import contentsRoutes from './contents';
 import episodesRoutes from './episodes';
 import likeRoutes from './like';
+import watchRoutes from './watch';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 
@@ -61,6 +62,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Like / Unlike route
   fastify.register(likeRoutes);
+
+  // Watch page route (video player + episodes + lock/unlock)
+  fastify.register(watchRoutes);
 
   // Home page route for app
   fastify.get('/home', getHomePage);

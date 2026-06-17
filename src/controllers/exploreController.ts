@@ -47,8 +47,23 @@ const mapContentItem = (
   likeCount,
   isLikedByUser,
   shares: item.shares || 0,
-  // Share URL — ready to send on WhatsApp / social media
-  shareUrl: `${FRONTEND_URL}/video/${item._id.toString()}`,
+  // Share URL — slug-based deep link (human-readable, WhatsApp/social ready)
+  // Priority: slug → auto-slug from title → id fallback
+  shareUrl: (() => {
+    const slug =
+      item.slug ||
+      (item.title
+        ? item.title
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
+            .replace(/\s+/g, '-')            // spaces → hyphens
+            .replace(/-+/g, '-')             // collapse multiple hyphens
+        : null);
+    return slug
+      ? `${FRONTEND_URL}/watch/${slug}`
+      : `${FRONTEND_URL}/watch/${item._id.toString()}`;
+  })(),
   featured: item.featured,
   trending: item.trending,
   isNewContent: item.isNewContent,

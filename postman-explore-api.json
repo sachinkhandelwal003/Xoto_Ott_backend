@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Xoto OTT — Explore API",
-    "_postman_id": "xoto-explore-api-2024",
-    "description": "Postman collection for testing the Explore API with likeCount, isLikedByUser, and first-episode-only preview (short-drama reel style).",
+    "name": "Xoto OTT — Explore + Like API",
+    "_postman_id": "xoto-explore-like-api-2024",
+    "description": "Complete Postman collection for Explore API (likeCount, isLikedByUser, shareUrl, first episode preview) and Like Toggle API.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,15 +15,21 @@
       "key": "accessToken",
       "value": "",
       "type": "string",
-      "description": "Set this after running 'App Login (OTP Verify)'"
+      "description": "Auto-filled after running Verify OTP request"
+    },
+    {
+      "key": "contentId",
+      "value": "6a32c3497f027c383ceb9fc4",
+      "type": "string",
+      "description": "Drama content ID for like testing (CEO Billionaire)"
     }
   ],
   "item": [
     {
-      "name": "🔐 Auth",
+      "name": "🔐 Step 1 — Auth (Get Token)",
       "item": [
         {
-          "name": "1. Send OTP",
+          "name": "Send OTP",
           "request": {
             "method": "POST",
             "header": [
@@ -38,12 +44,11 @@
               "mode": "raw",
               "raw": "{\n  \"mobileNumber\": \"9999999999\"\n}"
             },
-            "description": "Send OTP to a mobile number. Use any 10-digit number."
-          },
-          "response": []
+            "description": "Step 1: Send OTP to mobile number"
+          }
         },
         {
-          "name": "2. Verify OTP → Get Token",
+          "name": "Verify OTP → Auto Save Token ✅",
           "event": [
             {
               "listen": "test",
@@ -52,7 +57,10 @@
                   "const res = pm.response.json();",
                   "if (res.accessToken) {",
                   "  pm.collectionVariables.set('accessToken', res.accessToken);",
-                  "  console.log('✅ Token saved:', res.accessToken);",
+                  "  console.log('✅ Token saved successfully!');",
+                  "  console.log('Token:', res.accessToken);",
+                  "} else {",
+                  "  console.log('❌ No token received:', JSON.stringify(res));",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -73,17 +81,36 @@
               "mode": "raw",
               "raw": "{\n  \"mobileNumber\": \"9999999999\",\n  \"otp\": \"1234\"\n}"
             },
-            "description": "Verify OTP using static OTP '1234'. The test script auto-saves the accessToken to collection variable."
-          },
-          "response": []
+            "description": "Step 2: Verify OTP with static code 1234. Token is auto-saved to {{accessToken}} variable."
+          }
         }
       ]
     },
     {
-      "name": "🎬 Explore API",
+      "name": "🎬 Step 2 — Explore API",
       "item": [
         {
           "name": "GET Explore — Dramas (No Auth)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data.items.length > 0) {",
+                  "  const firstId = res.data.items[0].id;",
+                  "  pm.collectionVariables.set('contentId', firstId);",
+                  "  console.log('✅ contentId saved:', firstId);",
+                  "  console.log('Title:', res.data.items[0].title);",
+                  "  console.log('likeCount:', res.data.items[0].likeCount);",
+                  "  console.log('isLikedByUser:', res.data.items[0].isLikedByUser);",
+                  "  console.log('shareUrl:', res.data.items[0].shareUrl);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -94,13 +121,12 @@
               "query": [
                 { "key": "contentType", "value": "drama", "description": "drama | movie" },
                 { "key": "sort", "value": "new", "description": "new | trending | views | featured" },
-                { "key": "offset", "value": "0", "description": "Pagination offset (start from 0)" },
-                { "key": "limit", "value": "5", "description": "Max 10 items per page" }
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
               ]
             },
-            "description": "Fetch drama explore feed WITHOUT auth token.\n\n✅ Expected: isLikedByUser = false for all items\n✅ Each item has likeCount\n✅ Only first episode (ep 1) data in videoUrl/firstEpisodeId\n✅ NO full episode list returned"
-          },
-          "response": []
+            "description": "Fetch drama reel feed WITHOUT auth.\n\nExpected in each item:\n✅ likeCount (number)\n✅ isLikedByUser: false (no auth)\n✅ shareUrl (deep link)\n✅ videoUrl (episode 1 only)\n✅ firstEpisodeId, firstEpisodeTitle, firstEpisodeDuration\n\n⚡ Test script auto-saves first contentId to {{contentId}} variable."
+          }
         },
         {
           "name": "GET Explore — Dramas (With Auth ✅)",
@@ -109,8 +135,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "description": "Run 'Verify OTP' first to populate this token"
+                "value": "Bearer {{accessToken}}"
               }
             ],
             "url": {
@@ -118,18 +143,17 @@
               "host": ["{{baseUrl}}"],
               "path": ["explore"],
               "query": [
-                { "key": "contentType", "value": "drama", "description": "drama | movie" },
-                { "key": "sort", "value": "new", "description": "new | trending | views | featured" },
-                { "key": "offset", "value": "0", "description": "Pagination offset" },
-                { "key": "limit", "value": "5", "description": "Max 10 per page" }
+                { "key": "contentType", "value": "drama" },
+                { "key": "sort", "value": "new" },
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
               ]
             },
-            "description": "Fetch drama explore feed WITH auth token.\n\n✅ Expected: isLikedByUser = true/false based on actual user likes\n✅ likeCount is populated\n✅ Only first episode (preview) data returned"
-          },
-          "response": []
+            "description": "Fetch drama reel feed WITH auth token.\n✅ isLikedByUser will be true/false based on actual user likes"
+          }
         },
         {
-          "name": "GET Explore — Movies (No Auth)",
+          "name": "GET Explore — Movies",
           "request": {
             "method": "GET",
             "header": [],
@@ -143,13 +167,29 @@
                 { "key": "offset", "value": "0" },
                 { "key": "limit", "value": "5" }
               ]
-            },
-            "description": "Fetch movie explore feed."
-          },
-          "response": []
+            }
+          }
         },
         {
-          "name": "GET Explore — Sort: Views",
+          "name": "GET Explore — Sort: Trending",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=trending&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama" },
+                { "key": "sort", "value": "trending" },
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Explore — Sort: Most Viewed",
           "request": {
             "method": "GET",
             "header": [],
@@ -163,10 +203,8 @@
                 { "key": "offset", "value": "0" },
                 { "key": "limit", "value": "5" }
               ]
-            },
-            "description": "Sort dramas by most viewed."
-          },
-          "response": []
+            }
+          }
         },
         {
           "name": "GET Explore — Sort: Featured",
@@ -183,13 +221,11 @@
                 { "key": "offset", "value": "0" },
                 { "key": "limit", "value": "5" }
               ]
-            },
-            "description": "Fetch only featured dramas."
-          },
-          "response": []
+            }
+          }
         },
         {
-          "name": "GET Explore — Pagination (Page 2)",
+          "name": "GET Explore — Page 2 (Infinite Scroll)",
           "request": {
             "method": "GET",
             "header": [],
@@ -200,13 +236,110 @@
               "query": [
                 { "key": "contentType", "value": "drama" },
                 { "key": "sort", "value": "new" },
-                { "key": "offset", "value": "5", "description": "Start from item 6 (next page)" },
+                { "key": "offset", "value": "5", "description": "Use nextOffset from previous response" },
                 { "key": "limit", "value": "5" }
               ]
             },
-            "description": "Infinite scroll — page 2. Use 'nextOffset' from previous response as the next offset."
-          },
-          "response": []
+            "description": "Infinite scroll — page 2. Use 'nextOffset' value from previous response as offset."
+          }
+        }
+      ]
+    },
+    {
+      "name": "❤️ Step 3 — Like API",
+      "item": [
+        {
+          "name": "LIKE — Drama (Toggle ❤️ → 🤍)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "console.log('Message:', res.message);",
+                  "console.log('likeCount:', res.data?.likeCount);",
+                  "console.log('isLikedByUser:', res.data?.isLikedByUser);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/like/{{contentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["like", "{{contentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"drama\"\n}"
+            },
+            "description": "Like or Unlike a drama.\n\n🔁 Call 1 → Liked  (isLikedByUser: true)\n🔁 Call 2 → Unliked (isLikedByUser: false)\n\nRequires: Bearer token from Verify OTP step.\ncontentId is auto-set from Explore API test script."
+          }
+        },
+        {
+          "name": "LIKE — Movie (Toggle ❤️ → 🤍)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/like/{{contentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["like", "{{contentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"movie\"\n}"
+            },
+            "description": "Like or Unlike a movie."
+          }
+        },
+        {
+          "name": "LIKE — No Auth (Should return 401 ❌)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/like/{{contentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["like", "{{contentId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"drama\"\n}"
+            },
+            "description": "Should return 401 — Authentication required."
+          }
+        },
+        {
+          "name": "LIKE — Invalid Content ID (Should return 400 ❌)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/like/invalid-id-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["like", "invalid-id-123"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"drama\"\n}"
+            },
+            "description": "Should return 400 — Invalid contentId."
+          }
         }
       ]
     }
