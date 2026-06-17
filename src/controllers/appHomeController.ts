@@ -91,7 +91,10 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     // Get sections from database, or fallback to default
     const dbSections = await SectionModel.find({ 
-      contentType: tab, isActive: true }).sort({ position: 1 });
+      contentType: tab, isActive: true })
+      .select('key title category contentType sortBy limit position isActive layout showViewAll itemType filter')
+      .sort({ position: 1 })
+      .lean();
     let sectionsToFetch = dbSections.length > 0 ? dbSections : getFallbackSections(tab);
 
     // Fetch banners for the current tab
