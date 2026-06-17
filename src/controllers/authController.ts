@@ -78,6 +78,7 @@ export const getMe = async (request: FastifyRequest, reply: FastifyReply) => {
     const defaultModulePermissions = {
       movies: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       shows: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+      shortDramas: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       genres: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       actors: { canView: true, canCreate: false, canEdit: false, canDelete: false },
       directors: { canView: true, canCreate: false, canEdit: false, canDelete: false },
@@ -133,11 +134,16 @@ export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
 export const updateProfile = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const userId = (request.user as any).id;
-    const { name, avatar } = request.body as { name?: string; avatar?: string };
+    const { name, email, avatar } = request.body as { name?: string; email?: string; avatar?: string };
 
     const updateData: any = {};
     if (name) updateData.name = name;
     if (avatar) updateData.avatar = avatar;
+    if (email) {
+      const existing = await AdminUserModel.findOne({ email: email.toLowerCase(), _id: { $ne: userId } });
+      if (existing) return reply.status(400).send({ error: 'Email already in use' });
+      updateData.email = email.toLowerCase();
+    }
 
     const admin = await AdminUserModel.findByIdAndUpdate(
       userId,
@@ -151,7 +157,7 @@ export const updateProfile = async (request: FastifyRequest, reply: FastifyReply
 
     return reply.send({
       success: true,
-      data: admin,
+      data: { ...admin, id: (admin._id as any)?.toString() },
     });
   } catch (error) {
     console.error(error);
@@ -194,6 +200,52 @@ export const updatePassword = async (request: FastifyRequest, reply: FastifyRepl
     return reply.send({
       success: true,
       message: 'Password updated successfully',
+    });
+  } catch (error) {
+    console.error(error);
+    return reply.status(500).send({ error: 'Internal server error' });
+  }
+};
+
+// Reset or create superadmin — protected by ADMIN_SETUP_KEY env var
+export const setupAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { setupKey, email, password, name } = request.body as {
+      setupKey: string;
+      email: string;
+      password: string;
+      name?: string;
+    };
+
+    const expectedKey = process.env.ADMIN_SETUP_KEY || 'kotibox_setup_2024';
+    if (setupKey !== expectedKey) {
+      return reply.status(403).send({ error: 'Invalid setup key' });
+    }
+
+    if (!email || !password) {
+      return reply.status(400).send({ error: 'email and password are required' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const admin = await AdminUserModel.findOneAndUpdate(
+      { role: 'superadmin' },
+      {
+        $set: {
+          email: email.toLowerCase(),
+          name: name || 'Super Admin',
+          passwordHash,
+          role: 'superadmin',
+          isActive: true,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return reply.send({
+      success: true,
+      message: 'Superadmin created/updated successfully',
+      data: { email: admin.email, name: admin.name },
     });
   } catch (error) {
     console.error(error);

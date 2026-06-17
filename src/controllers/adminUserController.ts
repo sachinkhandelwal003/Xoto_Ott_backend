@@ -9,6 +9,7 @@ import { sendWelcomeEmail } from '../lib/email';
 const DEFAULT_MODULE_PERMISSIONS = {
   movies: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   shows: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+  shortDramas: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   genres: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   actors: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   directors: { canView: true, canCreate: false, canEdit: false, canDelete: false },

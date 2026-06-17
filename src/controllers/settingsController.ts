@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SettingsModel } from '../models/Settings';
 import uploadHandler from '../lib/uploadHandler';
+import { updateEnvFile } from '../lib/envUpdater';
 
 async function getOrCreateSettings() {
   let settings = await SettingsModel.findOne();
@@ -29,6 +30,21 @@ export const updateSettings = async (request: FastifyRequest, reply: FastifyRepl
       { $set: body },
       { new: true, upsert: true }
     );
+
+    // Sync SMTP fields to .env so they're available as env vars immediately
+    const envUpdates: Record<string, string> = {};
+    if (body.mailHost !== undefined)     envUpdates.EMAIL_HOST     = body.mailHost;
+    if (body.mailPort !== undefined)     envUpdates.EMAIL_PORT     = String(body.mailPort);
+    if (body.mailEncryption !== undefined) envUpdates.EMAIL_SECURE = body.mailEncryption === 'ssl' ? 'true' : 'false';
+    if (body.mailUsername !== undefined) envUpdates.EMAIL_USER     = body.mailUsername;
+    if (body.mailPassword !== undefined && body.mailPassword) envUpdates.EMAIL_PASS = body.mailPassword;
+    if (body.mailFrom !== undefined)     envUpdates.EMAIL_FROM     = body.mailFrom;
+    if (body.mailFromName !== undefined) envUpdates.EMAIL_FROM_NAME = body.mailFromName;
+
+    if (Object.keys(envUpdates).length > 0) {
+      updateEnvFile(envUpdates);
+    }
+
     return reply.send({
       success: true,
       data: settings

@@ -24,6 +24,8 @@ import dashboardRoutes from './dashboard';
 import movieRoutes from './movie';
 import adminUsersRoutes from './adminUsers';
 import sectionsRoutes from './sections';
+import contentsRoutes from './contents';
+import episodesRoutes from './episodes';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 
@@ -53,7 +55,9 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(movieRoutes, { prefix: '/movies' });
   fastify.register(adminUsersRoutes, { prefix: '/admin-users' });
   fastify.register(sectionsRoutes, { prefix: '/sections' });
-  
+  fastify.register(contentsRoutes, { prefix: '/contents' });
+  fastify.register(episodesRoutes, { prefix: '/episodes' });
+
   // Home page route for app
   fastify.get('/home', getHomePage);
   

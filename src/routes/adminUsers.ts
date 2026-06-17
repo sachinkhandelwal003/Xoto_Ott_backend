@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { authenticate } from '../middlewares/auth';
 import {
   getAllAdminUsers,
   getAdminUserById,
@@ -11,29 +12,14 @@ import {
 } from '../controllers/adminUserController';
 
 const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
-  // Get all admin users with pagination
-  fastify.get('/', getAllAdminUsers);
-
-  // Get single admin user by ID
-  fastify.get('/:id', getAdminUserById);
-
-  // Create new admin user
-  fastify.post('/', createAdminUser);
-
-  // Update admin user
-  fastify.put('/:id', updateAdminUser);
-
-  // Delete admin user
-  fastify.delete('/:id', deleteAdminUser);
-
-  // Reset user password
-  fastify.post('/:id/reset-password', resetUserPassword);
-
-  // Toggle user active status
-  fastify.patch('/:id/toggle-status', toggleUserStatus);
-
-  // Update own profile
-  fastify.put('/profile', updateOwnProfile);
+  fastify.get('/', { onRequest: [authenticate] }, getAllAdminUsers);
+  fastify.get('/:id', { onRequest: [authenticate] }, getAdminUserById);
+  fastify.post('/', { onRequest: [authenticate] }, createAdminUser);
+  fastify.put('/:id', { onRequest: [authenticate] }, updateAdminUser);
+  fastify.delete('/:id', { onRequest: [authenticate] }, deleteAdminUser);
+  fastify.post('/:id/reset-password', { onRequest: [authenticate] }, resetUserPassword);
+  fastify.patch('/:id/toggle-status', { onRequest: [authenticate] }, toggleUserStatus);
+  fastify.put('/profile', { onRequest: [authenticate] }, updateOwnProfile);
 };
 
 export default adminUsersRoutes;

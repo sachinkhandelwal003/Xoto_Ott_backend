@@ -1,7 +1,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { authenticate } from '../middlewares/auth';
-import { login, getMe, logout, updateProfile, updatePassword } from '../controllers/authController';
+import { login, getMe, logout, updateProfile, updatePassword, setupAdmin } from '../controllers/authController';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/auth/login', login);
@@ -9,6 +9,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/auth/logout', logout);
   fastify.patch('/auth/profile', { onRequest: [authenticate] }, updateProfile);
   fastify.patch('/auth/password', { onRequest: [authenticate] }, updatePassword);
+  // Setup/reset superadmin — requires ADMIN_SETUP_KEY
+  fastify.post('/auth/setup-admin', setupAdmin);
 };
 
 export default authRoutes;
