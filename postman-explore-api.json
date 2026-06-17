@@ -100,11 +100,15 @@
                   "if (res.success && res.data.items.length > 0) {",
                   "  const firstId = res.data.items[0].id;",
                   "  pm.collectionVariables.set('contentId', firstId);",
-                  "  console.log('✅ contentId saved:', firstId);",
-                  "  console.log('Title:', res.data.items[0].title);",
-                  "  console.log('likeCount:', res.data.items[0].likeCount);",
-                  "  console.log('isLikedByUser:', res.data.items[0].isLikedByUser);",
-                  "  console.log('shareUrl:', res.data.items[0].shareUrl);",
+                  "  ",
+                  "  // Save returnedIds and nextOffset for Pagination Test",
+                  "  if (res.data.returnedIds) {",
+                  "    pm.collectionVariables.set('seenIds', res.data.returnedIds.join(','));",
+                  "  }",
+                  "  if (res.data.nextOffset) {",
+                  "    pm.collectionVariables.set('nextOffset', res.data.nextOffset);",
+                  "  }",
+                  "  console.log('✅ Prepared Page 2 variables!');",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -125,7 +129,7 @@
                 { "key": "limit", "value": "5" }
               ]
             },
-            "description": "Fetch drama reel feed WITHOUT auth.\n\nExpected in each item:\n✅ likeCount (number)\n✅ isLikedByUser: false (no auth)\n✅ shareUrl (deep link)\n✅ videoUrl (episode 1 only)\n✅ firstEpisodeId, firstEpisodeTitle, firstEpisodeDuration\n\n⚡ Test script auto-saves first contentId to {{contentId}} variable."
+            "description": "Fetch drama reel feed WITHOUT auth.\n\n⚡ Test script auto-saves first contentId to {{contentId}} variable, and saves returnedIds to {{seenIds}} for Page 2 testing."
           }
         },
         {
@@ -230,17 +234,18 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/explore?contentType=drama&sort=new&offset=5&limit=5",
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=new&offset={{nextOffset}}&limit=5&seenIds={{seenIds}}",
               "host": ["{{baseUrl}}"],
               "path": ["explore"],
               "query": [
                 { "key": "contentType", "value": "drama" },
                 { "key": "sort", "value": "new" },
-                { "key": "offset", "value": "5", "description": "Use nextOffset from previous response" },
-                { "key": "limit", "value": "5" }
+                { "key": "offset", "value": "{{nextOffset}}", "description": "Auto-filled from Page 1 nextOffset" },
+                { "key": "limit", "value": "5" },
+                { "key": "seenIds", "value": "{{seenIds}}", "description": "Auto-filled from Page 1 returnedIds to prevent duplicates" }
               ]
             },
-            "description": "Infinite scroll — page 2. Use 'nextOffset' value from previous response as offset."
+            "description": "Infinite scroll — page 2.\n\n⚠️ IMPORTANT: Run 'GET Explore — Dramas (No Auth)' first!\nThe test script in that request will auto-fill the `{{nextOffset}}` and `{{seenIds}}` variables here so you don't see duplicate videos."
           }
         }
       ]

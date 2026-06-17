@@ -29,6 +29,7 @@ import episodesRoutes from './episodes';
 import likeRoutes from './like';
 import watchRoutes from './watch';
 import shareRoutes from './share';
+import appProfileRoutes from './appProfile';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 
@@ -69,6 +70,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Smart Deep Link Share route
   fastify.register(shareRoutes);
+
+  // App Profile / Settings route
+  fastify.register(appProfileRoutes, { prefix: '/app' });
 
   // Home page route for app
   fastify.get('/home', getHomePage);

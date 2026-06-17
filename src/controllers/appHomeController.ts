@@ -4,10 +4,41 @@ import { MovieModel } from '../models/Movie';
 import { ContentModel } from '../models/Content';
 import { EpisodeModel } from '../models/Episode';
 import { SectionModel } from '../models/Section';
+import { UserLikeModel } from '../models/UserLike';
 import { logger } from '../lib/logger';
+import mongoose from 'mongoose';
+
+// Base URL for the backend API (used for smart share links)
+const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
+
+// Helper: try to extract userId from JWT (optional auth — no error if missing/invalid)
+const getOptionalUserId = (request: FastifyRequest): string | null => {
+  try {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    const token = authHeader.slice(7);
+    const server = request.server as any;
+    const decoded = server.jwt.verify(token) as any;
+    return decoded?.id || null;
+  } catch {
+    return null;
+  }
+};
+
+// Helper: generate smart share URL pointing to backend redirect endpoint
+const buildShareUrl = (item: any): string => {
+  return `${API_URL}/share/${item._id.toString()}`;
+};
 
 // Helper function to map content items
-const mapContentItem = (item: any, type: string, episodeCount = 0) => ({
+const mapContentItem = (
+  item: any,
+  type: string,
+  episodeCount = 0,
+  firstEpisode?: any,
+  likeCount = 0,
+  isLikedByUser = false,
+) => ({
   id: item._id.toString(),
   title: item.title,
   description: item.description,
@@ -17,10 +48,13 @@ const mapContentItem = (item: any, type: string, episodeCount = 0) => ({
   type,
   episodeCount,
   genres: item.genres,
+  genresText: item.genres?.join(' & ') || '',
   languages: item.languages,
   views: item.views || 0,
-  likes: item.likes || 0,
+  likeCount,
+  isLikedByUser,
   shares: item.shares || 0,
+  shareUrl: buildShareUrl(item),
   featured: item.featured,
   trending: item.trending,
   isNewContent: item.isNewContent,
@@ -30,10 +64,24 @@ const mapContentItem = (item: any, type: string, episodeCount = 0) => ({
   status: item.status,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
+  // Preview video info — only first episode (short-drama reel style)
+  videoUrl: firstEpisode?.hlsUrl || item.hlsUrl || null,
+  trailerUrl: firstEpisode?.trailerUrl || item.trailerUrl || null,
+  firstEpisodeId: firstEpisode?._id?.toString() || null,
+  firstEpisodeTitle: firstEpisode?.title || null,
+  firstEpisodeThumbnail: firstEpisode?.thumbnail || item.thumbnail || null,
+  firstEpisodeDuration: firstEpisode?.duration || null,
+  firstEpisodeIsFree: firstEpisode?.isFree ?? null,
 });
 
 // Helper function to map banner
-const mapBanner = (banner: any, episodeCount = 0) => {
+const mapBanner = (
+  banner: any,
+  episodeCount = 0,
+  firstEpisode?: any,
+  likeCount = 0,
+  isLikedByUser = false,
+) => {
   const content = banner.contentId;
   const thumbnail = content?.thumbnail || banner.imageUrl;
   return {
@@ -47,7 +95,7 @@ const mapBanner = (banner: any, episodeCount = 0) => {
     ctaText: banner.ctaText,
     ctaLink: banner.ctaLink,
     contentId: banner.contentId?._id?.toString(),
-    content: content ? mapContentItem(content, content.type, episodeCount) : undefined,
+    content: content ? mapContentItem(content, content.type || banner.contentType || 'series', episodeCount, firstEpisode, likeCount, isLikedByUser) : undefined,
     type: banner.type,
     contentType: banner.contentType,
     position: banner.position,
@@ -88,6 +136,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const tab = query.tab || 'drama';
     const limit = Math.min(20, Math.max(1, Number(query.limit || 10)));
     const now = new Date();
+    
+    const userId = getOptionalUserId(request);
 
     // Get sections from database, or fallback to default
     const dbSections = await SectionModel.find({ 
@@ -116,14 +166,12 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const sectionPromises = sectionsToFetch.map(async (section) => {
       let content;
       if (tab === 'drama') {
-        // Get short dramas (series type)
         const filter: any = { type: 'series', status: 'published', contentType: 'drama', ...section.filter };
         content = await ContentModel.find(filter)
           .sort(section.sortBy)
           .limit(section.limit)
           .lean();
       } else {
-        // Get movies
         const filter: any = { status: 'published', ...section.filter };
         content = await MovieModel.find(filter)
           .sort(section.sortBy)
@@ -135,29 +183,65 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     const sectionsWithContent = await Promise.all(sectionPromises);
 
-    // Get episode counts for drama content
-    let countMap = new Map();
-    if (tab === 'drama') {
-      const allDramaContentIds = sectionsWithContent.flatMap(s => s.content.map(c => c._id));
+    // ── Aggregate Data (Episodes & Likes) ─────────────────────────────────────
+    
+    // Collect all content IDs from banners and sections
+    const allContentIdsSet = new Set<string>();
+    banners.forEach(b => { if (b.contentId) allContentIdsSet.add(b.contentId._id.toString()); });
+    sectionsWithContent.forEach(s => s.content.forEach(c => allContentIdsSet.add(c._id.toString())));
+    
+    const allContentIds = Array.from(allContentIdsSet).map(id => new mongoose.Types.ObjectId(id));
+
+    let firstEpisodeMap = new Map<string, any>();
+    let episodeCountMap = new Map<string, number>();
+
+    if (tab === 'drama' && allContentIds.length > 0) {
+      // Get S1E1 for previews
+      const firstEpisodes = await EpisodeModel.aggregate([
+        {
+          $match: {
+            contentId: { $in: allContentIds },
+            season: 1,
+            episode: 1,
+            processingStatus: 'ready',
+          },
+        },
+        { $sort: { season: 1, episode: 1 } },
+      ]);
+      firstEpisodes.forEach(e => firstEpisodeMap.set(e.contentId.toString(), e));
+
+      // Get episode counts
       const episodeCounts = await EpisodeModel.aggregate([
-        { $match: { contentId: { $in: allDramaContentIds } } },
+        { $match: { contentId: { $in: allContentIds } } },
         { $group: { _id: '$contentId', count: { $sum: 1 } } },
       ]);
-      countMap = new Map(episodeCounts.map(item => [item._id.toString(), item.count]));
+      episodeCounts.forEach(e => episodeCountMap.set(e._id.toString(), e.count));
     }
 
-    // Get episode counts for banners
-    const bannerContentIds = banners.map(b => b.contentId?._id).filter(Boolean);
-    const bannerEpisodeCounts = await EpisodeModel.aggregate([
-      { $match: { contentId: { $in: bannerContentIds } } },
-      { $group: { _id: '$contentId', count: { $sum: 1 } } },
-    ]);
-    const bannerCountMap = new Map(bannerEpisodeCounts.map(item => [item._id.toString(), item.count]));
+    // Get user likes
+    const likedContentIdSet = new Set<string>();
+    if (userId && allContentIds.length > 0) {
+      const userLikes = await UserLikeModel.find({
+        userId,
+        contentId: { $in: allContentIds },
+      }).select('contentId').lean();
+      userLikes.forEach(l => likedContentIdSet.add(l.contentId.toString()));
+    }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
 
     // Map banners
-    const mappedBanners = banners.map(banner => 
-      mapBanner(banner, banner.contentId ? bannerCountMap.get(banner.contentId._id.toString()) || 0 : 0)
-    );
+    const mappedBanners = banners.map(banner => {
+      if (!banner.contentId) return mapBanner(banner);
+      
+      const cid = (banner.contentId as any)._id.toString();
+      const likeCount = (banner.contentId as any).likes || 0;
+      const isLikedByUser = likedContentIdSet.has(cid);
+      const episodeCount = episodeCountMap.get(cid) || 0;
+      const firstEpisode = firstEpisodeMap.get(cid);
+      
+      return mapBanner(banner, episodeCount, firstEpisode, likeCount, isLikedByUser);
+    });
 
     // Map sections
     const mappedSections = sectionsWithContent.map(section => ({
@@ -168,13 +252,16 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       showViewAll: section.showViewAll !== false,
       itemType: section.itemType || 'poster',
       shows: section.content.map((item: any) => {
+        const cid = item._id.toString();
+        const likeCount = item.likes || 0;
+        const isLikedByUser = likedContentIdSet.has(cid);
+
         if (tab === 'drama') {
-          return mapContentItem(item, 'drama', countMap.get(item._id.toString()) || 0);
+          const episodeCount = episodeCountMap.get(cid) || 0;
+          const firstEpisode = firstEpisodeMap.get(cid);
+          return mapContentItem(item, 'drama', episodeCount, firstEpisode, likeCount, isLikedByUser);
         } else {
-          return {
-            ...mapContentItem(item, 'movie'),
-            id: item._id.toString(),
-          };
+          return mapContentItem(item, 'movie', 0, undefined, likeCount, isLikedByUser);
         }
       }),
     }));

@@ -30,6 +30,7 @@ export interface IUser extends Document {
   preferredRegion?: string;
   watchlistCount: number;
   totalWatchTime: number;
+  videoQuality: 'auto' | 'best' | 'data_saver';
   status: 'active' | 'banned' | 'suspended';
   banReason?: string;
   referralCode?: string;
@@ -81,6 +82,7 @@ const UserSchema = new Schema<IUser>(
     preferredRegion: String,
     watchlistCount: { type: Number, default: 0 },
     totalWatchTime: { type: Number, default: 0 },
+    videoQuality: { type: String, enum: ['auto', 'best', 'data_saver'], default: 'auto' },
     status: { type: String, enum: ['active', 'banned', 'suspended'], default: 'active' },
     banReason: String,
     referralCode: String,
