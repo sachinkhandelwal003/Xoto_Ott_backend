@@ -28,6 +28,7 @@ import contentsRoutes from './contents';
 import episodesRoutes from './episodes';
 import likeRoutes from './like';
 import watchRoutes from './watch';
+import shareRoutes from './share';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 
@@ -65,6 +66,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Watch page route (video player + episodes + lock/unlock)
   fastify.register(watchRoutes);
+
+  // Smart Deep Link Share route
+  fastify.register(shareRoutes);
 
   // Home page route for app
   fastify.get('/home', getHomePage);

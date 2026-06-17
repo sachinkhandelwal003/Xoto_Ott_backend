@@ -14,24 +14,12 @@ const PLAN_LEVELS: Record<string, number> = {
   premium: 3,
 };
 
-// Base URL for share links
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://aapki-website.com').replace(/\/$/, '');
+// Base URL for the backend API (used for smart share links)
+const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
 
-// Helper: generate share URL from slug/title/id
+// Helper: generate smart share URL pointing to backend redirect endpoint
 const buildShareUrl = (item: any): string => {
-  const slug =
-    item.slug ||
-    (item.title
-      ? item.title
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-')
-      : null);
-  return slug
-    ? `${FRONTEND_URL}/watch/${slug}`
-    : `${FRONTEND_URL}/watch/${item._id.toString()}`;
+  return `${API_URL}/share/${item._id.toString()}`;
 };
 
 // Helper: optional JWT extraction (no error if missing)

@@ -8,6 +8,9 @@ import { logger } from '../lib/logger';
 // Base URL for share links (set FRONTEND_URL in .env)
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://aapki-website.com').replace(/\/$/, '');
 
+// How many extra items to fetch per page to survive deduplication filtering
+const FETCH_MULTIPLIER = 4;
+
 // Helper: try to extract userId from JWT (optional auth — no error if missing/invalid)
 const getOptionalUserId = (request: FastifyRequest): string | null => {
   try {
@@ -20,6 +23,14 @@ const getOptionalUserId = (request: FastifyRequest): string | null => {
   } catch {
     return null;
   }
+};
+
+// Base URL for the backend API (used for smart share links)
+const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
+
+// Helper: generate smart share URL pointing to backend redirect endpoint
+const buildShareUrl = (item: any): string => {
+  return `${API_URL}/share/${item._id.toString()}`;
 };
 
 // Helper function to map content items for the explore / short-drama reel feed
@@ -40,30 +51,13 @@ const mapContentItem = (
   type,
   episodeCount,
   genres: item.genres,
-  genresText: item.genres.join(' & '), // For subtitle (like "Romance & Drama")
+  genresText: item.genres.join(' & '),
   languages: item.languages,
   views: item.views || 0,
-  // Like fields
   likeCount,
   isLikedByUser,
   shares: item.shares || 0,
-  // Share URL — slug-based deep link (human-readable, WhatsApp/social ready)
-  // Priority: slug → auto-slug from title → id fallback
-  shareUrl: (() => {
-    const slug =
-      item.slug ||
-      (item.title
-        ? item.title
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
-            .replace(/\s+/g, '-')            // spaces → hyphens
-            .replace(/-+/g, '-')             // collapse multiple hyphens
-        : null);
-    return slug
-      ? `${FRONTEND_URL}/watch/${slug}`
-      : `${FRONTEND_URL}/watch/${item._id.toString()}`;
-  })(),
+  shareUrl: buildShareUrl(item),
   featured: item.featured,
   trending: item.trending,
   isNewContent: item.isNewContent,
@@ -73,12 +67,12 @@ const mapContentItem = (
   status: item.status,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
-  // Preview video info — only first episode (short-drama reel style)
+  // Preview — ONLY episode 1 (short-drama reel style, no full list)
   videoUrl: firstEpisode?.hlsUrl || item.hlsUrl || null,
   trailerUrl: firstEpisode?.trailerUrl || item.trailerUrl || null,
   firstEpisodeId: firstEpisode?._id?.toString() || null,
   firstEpisodeTitle: firstEpisode?.title || null,
-  firstEpisodeThumbnail: firstEpisode?.thumbnail || null,
+  firstEpisodeThumbnail: firstEpisode?.thumbnail || item.thumbnail || null,
   firstEpisodeDuration: firstEpisode?.duration || null,
   firstEpisodeIsFree: firstEpisode?.isFree ?? null,
 });
@@ -91,79 +85,87 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
       limit?: string;
       sort?: 'new' | 'trending' | 'views' | 'featured';
       contentType?: 'drama' | 'movie';
+      // Comma-separated contentIds already seen — frontend passes these for dedup across sessions
+      seenIds?: string;
     };
 
     const offset = Math.max(0, Number(query.offset || 0));
-    const limit = Math.min(10, Math.max(1, Number(query.limit || 1)));
+    const limit = Math.min(10, Math.max(1, Number(query.limit || 5)));
     const sort = query.sort || 'new';
     const contentType = query.contentType || 'drama';
+
+    // Parse already-seen IDs sent by the client (dedup across scroll sessions)
+    const seenIds = query.seenIds
+      ? query.seenIds.split(',').map(id => id.trim()).filter(Boolean)
+      : [];
 
     // Optional auth — used for isLikedByUser
     const userId = getOptionalUserId(request);
 
-    let sortBy = {};
+    let sortBy: any = {};
     let filter: any = { status: 'published' };
 
-    // Add contentType filter for dramas
     if (contentType === 'drama') {
       filter.contentType = 'drama';
     }
 
-    // Determine sorting
+    // Exclude content IDs the client has already seen
+    if (seenIds.length > 0) {
+      const mongoose = await import('mongoose');
+      const seenObjectIds = seenIds
+        .filter(id => mongoose.default.Types.ObjectId.isValid(id))
+        .map(id => new mongoose.default.Types.ObjectId(id));
+      if (seenObjectIds.length > 0) {
+        filter._id = { $nin: seenObjectIds };
+      }
+    }
+
     switch (sort) {
-      case 'new':
-        sortBy = { createdAt: -1 };
-        break;
-      case 'trending':
-        sortBy = { trending: -1, views: -1 };
-        break;
-      case 'views':
-        sortBy = { views: -1 };
-        break;
+      case 'new':       sortBy = { createdAt: -1 }; break;
+      case 'trending':  sortBy = { trending: -1, views: -1 }; break;
+      case 'views':     sortBy = { views: -1 }; break;
       case 'featured':
         sortBy = { featured: -1, views: -1 };
         filter = { ...filter, featured: true };
         break;
-      default:
-        sortBy = { createdAt: -1 };
+      default:          sortBy = { createdAt: -1 };
     }
 
-    const skip = offset;
+    // ── Fetch a larger batch to allow for deduplication ──────────────────────
+    const fetchLimit = limit * FETCH_MULTIPLIER;
 
-    // Fetch data based on contentType
-    let contents: any[] = [];
-    let contentModelType: 'Content' | 'Movie' = 'Content';
+    let rawContents: any[] = [];
 
     if (contentType === 'movie') {
-      contentModelType = 'Movie';
-      contents = await MovieModel.find(filter)
+      rawContents = await MovieModel.find(filter)
         .sort(sortBy)
-        .skip(skip)
-        .limit(limit)
+        .skip(offset)
+        .limit(fetchLimit)
         .lean();
     } else {
-      contentModelType = 'Content';
-      contents = await ContentModel.find(filter)
+      rawContents = await ContentModel.find(filter)
         .sort(sortBy)
-        .skip(skip)
-        .limit(limit)
+        .skip(offset)
+        .limit(fetchLimit)
         .lean();
     }
 
-    logger.info({ contentType, filter, sortBy, offset, limit, contentsLength: contents.length }, 'Explore API query results');
+    logger.info(
+      { contentType, offset, limit, fetchLimit, raw: rawContents.length },
+      'Explore API raw fetch',
+    );
 
-    const contentIds = contents.map(c => c._id);
+    const rawContentIds = rawContents.map(c => c._id);
 
-    // --- First episode only (for short-drama preview) ---
+    // ── Fetch ONLY S1E1 for each content (preview episode) ──────────────────
     let firstEpisodeMap = new Map<string, any>();
     let episodeCountMap = new Map<string, number>();
 
-    if (contentType === 'drama') {
-      // Fetch ONLY season 1 ep 1 (the preview episode) per content
+    if (contentType === 'drama' && rawContentIds.length > 0) {
       const firstEpisodes = await EpisodeModel.aggregate([
         {
           $match: {
-            contentId: { $in: contentIds },
+            contentId: { $in: rawContentIds },
             season: 1,
             episode: 1,
             processingStatus: 'ready',
@@ -176,9 +178,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         firstEpisodeMap.set(e.contentId.toString(), e);
       });
 
-      // Get episode counts (total ep count displayed in UI)
       const episodeCounts = await EpisodeModel.aggregate([
-        { $match: { contentId: { $in: contentIds } } },
+        { $match: { contentId: { $in: rawContentIds } } },
         { $group: { _id: '$contentId', count: { $sum: 1 } } },
       ]);
 
@@ -187,20 +188,53 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
       });
     }
 
-    // --- isLikedByUser ---
+    // ── Deduplicate: remove items with same thumbnail OR same videoUrl ────────
+    const seenThumbnails = new Set<string>();
+    const seenVideoUrls = new Set<string>();
+    const uniqueContents: any[] = [];
+
+    for (const content of rawContents) {
+      const cid = content._id.toString();
+      const firstEpisode = firstEpisodeMap.get(cid);
+
+      const thumbnail = content.thumbnail || '';
+      const videoUrl = firstEpisode?.hlsUrl || content.hlsUrl || '';
+
+      // Skip if we have no video to show for dramas
+      if (contentType === 'drama' && !videoUrl) continue;
+
+      // Skip if thumbnail is duplicate
+      if (thumbnail && seenThumbnails.has(thumbnail)) continue;
+
+      // Skip if video URL is duplicate
+      if (videoUrl && seenVideoUrls.has(videoUrl)) continue;
+
+      // Mark as seen
+      if (thumbnail) seenThumbnails.add(thumbnail);
+      if (videoUrl) seenVideoUrls.add(videoUrl);
+
+      uniqueContents.push(content);
+
+      // Stop once we have enough unique items
+      if (uniqueContents.length >= limit) break;
+    }
+
+    // ── Fetch like status for unique items ────────────────────────────────────
+    const uniqueIds = uniqueContents.map(c => c._id);
     const likedContentIdSet = new Set<string>();
-    if (userId && contentIds.length > 0) {
+
+    if (userId && uniqueIds.length > 0) {
       const userLikes = await UserLikeModel.find({
         userId,
-        contentId: { $in: contentIds },
+        contentId: { $in: uniqueIds },
       })
         .select('contentId')
         .lean();
       userLikes.forEach(l => likedContentIdSet.add(l.contentId.toString()));
     }
 
-    // Map the data
-    const items = contents.map(content => {
+    // ── Map to response ───────────────────────────────────────────────────────
+    const items = uniqueContents.map(content => {
       const cid = content._id.toString();
       const likeCount: number = content.likes || 0;
       const isLikedByUser: boolean = likedContentIdSet.has(cid);
@@ -209,17 +243,24 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         return mapContentItem(content, 'movie', 0, undefined, likeCount, isLikedByUser);
       } else {
         const episodeCount = episodeCountMap.get(cid) || 0;
-        const firstEpisode = firstEpisodeMap.get(cid); // only episode 1 preview
+        const firstEpisode = firstEpisodeMap.get(cid);
         return mapContentItem(content, content.type || 'series', episodeCount, firstEpisode, likeCount, isLikedByUser);
       }
     });
+
+    // nextOffset moves forward by the full raw fetch batch size (not just unique count)
+    // This ensures the next page never repeats items from this batch
+    const nextOffset = offset + rawContents.length;
+    const hasMore = rawContents.length === fetchLimit; // more items exist in DB
 
     reply.send({
       success: true,
       data: {
         items,
-        nextOffset: offset + items.length,
-        hasMore: items.length === limit,
+        // Tell the client which IDs were shown (use these as seenIds next call)
+        returnedIds: items.map(i => i.id),
+        nextOffset,
+        hasMore,
       },
     });
   } catch (error: any) {
@@ -227,7 +268,7 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
     reply.status(500).send({
       success: false,
       message: 'Failed to fetch explore data',
-      error: error.message
+      error: error.message,
     });
   }
 };
