@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "Xoto OTT — Explore API",
+    "_postman_id": "xoto-explore-api-2024",
+    "description": "Postman collection for testing the Explore API with likeCount, isLikedByUser, and first-episode-only preview (short-drama reel style).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "Set this after running 'App Login (OTP Verify)'"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "1. Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/app/auth/send-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["app", "auth", "send-otp"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"9999999999\"\n}"
+            },
+            "description": "Send OTP to a mobile number. Use any 10-digit number."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Verify OTP → Get Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', res.accessToken);",
+                  "  console.log('✅ Token saved:', res.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/app/auth/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["app", "auth", "verify-otp"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"9999999999\",\n  \"otp\": \"1234\"\n}"
+            },
+            "description": "Verify OTP using static OTP '1234'. The test script auto-saves the accessToken to collection variable."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🎬 Explore API",
+      "item": [
+        {
+          "name": "GET Explore — Dramas (No Auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=new&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama", "description": "drama | movie" },
+                { "key": "sort", "value": "new", "description": "new | trending | views | featured" },
+                { "key": "offset", "value": "0", "description": "Pagination offset (start from 0)" },
+                { "key": "limit", "value": "5", "description": "Max 10 items per page" }
+              ]
+            },
+            "description": "Fetch drama explore feed WITHOUT auth token.\n\n✅ Expected: isLikedByUser = false for all items\n✅ Each item has likeCount\n✅ Only first episode (ep 1) data in videoUrl/firstEpisodeId\n✅ NO full episode list returned"
+          },
+          "response": []
+        },
+        {
+          "name": "GET Explore — Dramas (With Auth ✅)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "description": "Run 'Verify OTP' first to populate this token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=new&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama", "description": "drama | movie" },
+                { "key": "sort", "value": "new", "description": "new | trending | views | featured" },
+                { "key": "offset", "value": "0", "description": "Pagination offset" },
+                { "key": "limit", "value": "5", "description": "Max 10 per page" }
+              ]
+            },
+            "description": "Fetch drama explore feed WITH auth token.\n\n✅ Expected: isLikedByUser = true/false based on actual user likes\n✅ likeCount is populated\n✅ Only first episode (preview) data returned"
+          },
+          "response": []
+        },
+        {
+          "name": "GET Explore — Movies (No Auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=movie&sort=trending&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "movie" },
+                { "key": "sort", "value": "trending" },
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
+              ]
+            },
+            "description": "Fetch movie explore feed."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Explore — Sort: Views",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=views&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama" },
+                { "key": "sort", "value": "views" },
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
+              ]
+            },
+            "description": "Sort dramas by most viewed."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Explore — Sort: Featured",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=featured&offset=0&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama" },
+                { "key": "sort", "value": "featured" },
+                { "key": "offset", "value": "0" },
+                { "key": "limit", "value": "5" }
+              ]
+            },
+            "description": "Fetch only featured dramas."
+          },
+          "response": []
+        },
+        {
+          "name": "GET Explore — Pagination (Page 2)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/explore?contentType=drama&sort=new&offset=5&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["explore"],
+              "query": [
+                { "key": "contentType", "value": "drama" },
+                { "key": "sort", "value": "new" },
+                { "key": "offset", "value": "5", "description": "Start from item 6 (next page)" },
+                { "key": "limit", "value": "5" }
+              ]
+            },
+            "description": "Infinite scroll — page 2. Use 'nextOffset' from previous response as the next offset."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
