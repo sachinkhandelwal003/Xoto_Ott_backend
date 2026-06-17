@@ -48,7 +48,7 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
     const sort = query.sort || 'new';
 
     let sortBy = {};
-    let filter = { status: 'published', contentType: 'drama' };
+    let filter: any = { status: 'published', contentType: 'drama' };
 
     // Determine sorting
     switch (sort) {
@@ -81,6 +81,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         .limit(limit)
         .exec(),
     ]);
+
+    logger.info({ filter, sortBy, total, contentsLength: contents.length }, 'Explore API query results');
 
     // Get first episodes for each content (for reels video)
     const contentIds = contents.map(c => c._id);
@@ -128,11 +130,12 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         },
       },
     });
-  } catch (error) {
-    logger.error('Error fetching explore data:', error);
+  } catch (error: any) {
+    logger.error(error, 'Error fetching explore data');
     reply.status(500).send({
       success: false,
       message: 'Failed to fetch explore data',
+      error: error.message
     });
   }
 };

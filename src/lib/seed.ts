@@ -559,20 +559,21 @@ async function seedSections() {
   const dramaSections = [
     { key: 'top-10-story-tv', title: 'Top 10 on Story TV', contentType: 'drama', sortBy: { views: -1 }, limit: 10, position: 1, isActive: true, layout: 'horizontal' },
     { key: 'ceo-billionaire', title: 'CEO Billionaire', contentType: 'drama', filter: { sections: 'ceo-billionaire' }, sortBy: { createdAt: -1 }, limit: 10, position: 2, isActive: true, layout: 'horizontal' },
-    { key: 'just-launched', title: 'Just Launched', contentType: 'drama', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10, position: 3, isActive: true, layout: 'vertical' },
+    { key: 'just-launched', title: 'Just Launched', contentType: 'drama', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10, position: 3, isActive: true, layout: 'horizontal' },
     { key: 'love-affairs', title: 'Love Affairs', contentType: 'drama', filter: { sections: 'love-affairs' }, sortBy: { views: -1 }, limit: 10, position: 4, isActive: true, layout: 'horizontal' },
-    { key: 'binge-worthy', title: 'Binge Worthy Series', contentType: 'drama', filter: { sections: 'binge-worthy' }, sortBy: { views: -1 }, limit: 10, position: 5, isActive: true, layout: 'grid-2' },
+    { key: 'binge-worthy', title: 'Binge Worthy Series', contentType: 'drama', filter: { sections: 'binge-worthy' }, sortBy: { views: -1 }, limit: 10, position: 5, isActive: true, layout: 'horizontal' },
     { key: 'story-tv-specials', title: 'Story TV Specials', contentType: 'drama', filter: { sections: 'story-tv-specials' }, sortBy: { views: -1 }, limit: 10, position: 6, isActive: true, layout: 'horizontal' },
-    { key: 'top-10-new-releases', title: 'Top 10 New Releases', contentType: 'drama', filter: { isNewContent: true }, sortBy: { views: -1 }, limit: 10, position: 7, isActive: true, layout: 'vertical' },
+    { key: 'top-10-new-releases', title: 'Top 10 New Releases', contentType: 'drama', filter: { isNewContent: true }, sortBy: { views: -1 }, limit: 10, position: 7, isActive: true, layout: 'horizontal' },
     { key: 'top-dramas', title: 'Top Dramas Of All Time', contentType: 'drama', sortBy: { views: -1 }, limit: 10, position: 8, isActive: true, layout: 'horizontal' },
     { key: 'royal-affair', title: 'Royal Affair', contentType: 'drama', filter: { sections: 'royal-affair' }, sortBy: { views: -1 }, limit: 10, position: 9, isActive: true, layout: 'horizontal' },
-    { key: 'mystery-mansion', title: 'Mystery Mansion', contentType: 'drama', filter: { sections: 'mystery-mansion' }, sortBy: { views: -1 }, limit: 10, position: 10, isActive: true, layout: 'grid-3' },
+    { key: 'mystery-mansion', title: 'Mystery Mansion', contentType: 'drama', filter: { sections: 'mystery-mansion' }, sortBy: { views: -1 }, limit: 10, position: 10, isActive: true, layout: 'horizontal' },
     { key: 'small-town-dreams', title: 'Small Town Dreams', contentType: 'drama', filter: { sections: 'small-town-dreams' }, sortBy: { views: -1 }, limit: 10, position: 11, isActive: true, layout: 'horizontal' },
-    { key: 'college-days', title: 'College Days', contentType: 'drama', filter: { sections: 'college-days' }, sortBy: { views: -1 }, limit: 10, position: 12, isActive: true, layout: 'vertical' },
+    { key: 'college-days', title: 'College Days', contentType: 'drama', filter: { sections: 'college-days' }, sortBy: { views: -1 }, limit: 10, position: 12, isActive: true, layout: 'horizontal' },
     { key: 'crime-patrol', title: 'Crime Patrol', contentType: 'drama', filter: { sections: 'crime-patrol' }, sortBy: { views: -1 }, limit: 10, position: 13, isActive: true, layout: 'horizontal' },
     { key: 'love-in-paris', title: 'Love in Paris', contentType: 'drama', filter: { sections: 'love-in-paris' }, sortBy: { views: -1 }, limit: 10, position: 14, isActive: true, layout: 'horizontal' },
-    { key: 'the-heist', title: 'The Heist', contentType: 'drama', filter: { sections: 'the-heist' }, sortBy: { views: -1 }, limit: 10, position: 15, isActive: true, layout: 'grid-2' },
+    { key: 'the-heist', title: 'The Heist', contentType: 'drama', filter: { sections: 'the-heist' }, sortBy: { views: -1 }, limit: 10, position: 15, isActive: true, layout: 'horizontal' },
     { key: 'family-secrets', title: 'Family Secrets', contentType: 'drama', filter: { sections: 'family-secrets' }, sortBy: { views: -1 }, limit: 10, position: 16, isActive: true, layout: 'horizontal' },
+    { key: 'all-dramas', title: 'All Dramas', contentType: 'drama', sortBy: { views: -1 }, limit: 50, position: 100, isActive: true, layout: 'vertical' },
   ];
 
   const movieSections = [
