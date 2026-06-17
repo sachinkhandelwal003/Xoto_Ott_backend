@@ -160,6 +160,7 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const mappedSections = sectionsWithContent.map(section => ({
       key: section.key,
       title: section.title,
+      name: section.title,
       layout: section.layout || 'horizontal',
       showViewAll: section.showViewAll !== false,
       itemType: section.itemType || 'poster',
