@@ -3,6 +3,7 @@ import { BannerModel } from '../models/Banner';
 import { MovieModel } from '../models/Movie';
 import { ContentModel } from '../models/Content';
 import { EpisodeModel } from '../models/Episode';
+import { SectionModel } from '../models/Section';
 import { logger } from '../lib/logger';
 
 // Helper function to map content items
@@ -57,6 +58,20 @@ const mapBanner = (banner: any, episodeCount = 0) => {
   };
 };
 
+// Helper function: Fallback sections (only if no sections in DB)
+const getFallbackSections = (tab: 'drama' | 'movie') => {
+  const fallbacks = {
+    drama: [
+      { key: 'top-10-story-tv', title: 'Top 10 on Story TV', sortBy: { views: -1 }, limit: 10 },
+      { key: 'just-launched', title: 'Just Launched', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10 },
+    ],
+    movie: [
+      { key: 'featured', title: 'Featured', filter: { featured: true }, sortBy: { createdAt: -1 }, limit: 10 },
+    ],
+  };
+  return fallbacks[tab];
+};
+
 // Get home page data
 export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -71,26 +86,10 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const limit = Math.min(20, Math.max(1, Number(query.limit || 10)));
     const now = new Date();
 
-    // Define sections for each tab
-    const dramaSections = [
-      { key: 'top-10-story-tv', title: 'Top 10 on Story TV', sortBy: { views: -1 }, limit: 10 },
-      { key: 'ceo-billionaire', title: 'CEO Billionaire', filter: { sections: 'ceo-billionaire' }, sortBy: { createdAt: -1 }, limit: 10 },
-      { key: 'just-launched', title: 'Just Launched', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10 },
-      { key: 'love-affairs', title: 'Love Affairs', filter: { sections: 'love-affairs' }, sortBy: { views: -1 }, limit: 10 },
-      { key: 'binge-worthy', title: 'Binge Worthy Series', filter: { sections: 'binge-worthy' }, sortBy: { views: -1 }, limit: 10 },
-      { key: 'story-tv-specials', title: 'Story TV Specials', filter: { sections: 'story-tv-specials' }, sortBy: { views: -1 }, limit: 10 },
-      { key: 'top-10-new-releases', title: 'Top 10 New Releases', filter: { isNewContent: true }, sortBy: { views: -1 }, limit: 10 },
-      { key: 'top-dramas', title: 'Top Dramas Of All Time', sortBy: { views: -1 }, limit: 10 },
-    ];
-
-    const movieSections = [
-      { key: 'featured', title: 'Featured', filter: { featured: true }, sortBy: { createdAt: -1 }, limit: 10 },
-      { key: 'trending', title: 'Trending', filter: { trending: true }, sortBy: { views: -1 }, limit: 10 },
-      { key: 'new-releases', title: 'New Releases', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10 },
-      { key: 'top-rated', title: 'Top Rated', sortBy: { views: -1 }, limit: 10 },
-    ];
-
-    const sectionsToFetch = tab === 'drama' ? dramaSections : movieSections;
+    // Get sections from database, or fallback to default
+    const dbSections = await SectionModel.find({ 
+      contentType: tab, isActive: true }).sort({ position: 1 });
+    let sectionsToFetch = dbSections.length > 0 ? dbSections : getFallbackSections(tab);
 
     // Fetch banners for the current tab
     const banners = await BannerModel.find({

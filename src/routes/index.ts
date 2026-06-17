@@ -23,7 +23,9 @@ import appSettingsRoutes from './appSettings';
 import dashboardRoutes from './dashboard';
 import movieRoutes from './movie';
 import adminUsersRoutes from './adminUsers';
+import sectionsRoutes from './sections';
 import { getHomePage } from '../controllers/appHomeController';
+import { getExplore } from '../controllers/exploreController';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -50,9 +52,13 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(dashboardRoutes);
   fastify.register(movieRoutes, { prefix: '/movies' });
   fastify.register(adminUsersRoutes, { prefix: '/admin-users' });
+  fastify.register(sectionsRoutes, { prefix: '/sections' });
   
   // Home page route for app
   fastify.get('/home', getHomePage);
+  
+  // Explore page (infinite scroll)
+  fastify.get('/explore', getExplore);
 };
 
 export default router;

@@ -1,0 +1,78 @@
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { SectionModel } from '../models/Section';
+
+export const getSections = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const query = request.query as {
+      contentType?: 'drama' | 'movie';
+      activeOnly?: string;
+    };
+
+    const filter: any = {};
+    if (query.contentType) filter.contentType = query.contentType;
+    if (query.activeOnly === 'true') filter.isActive = true;
+
+    const sections = await SectionModel.find(filter).sort({ position: 1 });
+    reply.send({ success: true, data: sections });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to fetch sections' });
+  }
+};
+
+export const getSectionById = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const params = request.params as { id: string };
+    const section = await SectionModel.findById(params.id);
+    if (!section) {
+      reply.status(404).send({ success: false, error: 'Section not found' });
+      return;
+    }
+    reply.send({ success: true, data: section });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to fetch section' });
+  }
+};
+
+export const createSection = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const body = request.body as any;
+    const section = await SectionModel.create(body);
+    reply.status(201).send({ success: true, data: section });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to create section' });
+  }
+};
+
+export const updateSection = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const params = request.params as { id: string };
+    const body = request.body as any;
+    const section = await SectionModel.findByIdAndUpdate(params.id, body, { new: true });
+    if (!section) {
+      reply.status(404).send({ success: false, error: 'Section not found' });
+      return;
+    }
+    reply.send({ success: true, data: section });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to update section' });
+  }
+};
+
+export const deleteSection = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const params = request.params as { id: string };
+    const section = await SectionModel.findByIdAndDelete(params.id);
+    if (!section) {
+      reply.status(404).send({ success: false, error: 'Section not found' });
+      return;
+    }
+    reply.send({ success: true, message: 'Section deleted successfully' });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to delete section' });
+  }
+};

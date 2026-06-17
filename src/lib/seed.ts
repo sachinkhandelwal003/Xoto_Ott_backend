@@ -14,6 +14,7 @@ import { NotificationModel } from '../models/Notification';
 import { BannerModel } from '../models/Banner';
 import { MovieModel } from '../models/Movie';
 import { EpisodeModel } from '../models/Episode';
+import { SectionModel } from '../models/Section';
 
 async function seedSubscriptionPlans() {
   const count = await SubscriptionPlanModel.countDocuments();
@@ -164,218 +165,118 @@ async function seedSampleContent() {
   const now = new Date();
   const daysAgo = (n: number) => new Date(now.getTime() - n * 86400000);
 
-  const content = [
-    // Short Dramas (contentType: 'drama', type: 'series')
-    {
-      title: 'CEO Billionaire',
-      type: 'series',
-      contentType: 'drama',
-      description: 'A powerful CEO falls in love with his assistant, but secrets from his past threaten their future.',
-      shortDescription: 'A romantic story of a billionaire and his assistant',
-      thumbnail: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=600&fit=crop&q=80',
-      bannerImage: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1200&h=600&fit=crop&q=80',
-      genres: ['Romance', 'Drama'],
-      languages: ['Hindi', 'English'],
-      subtitleLanguages: ['Hindi', 'English'],
-      audioLanguages: ['Hindi'],
-      year: 2024,
-      rating: 'TV-14',
-      ageRating: 13,
-      status: 'published',
-      hlsUrl: 'https://example.com/hls/ceo-billionaire/master.m3u8',
-      views: 5647293,
-      likes: 124532,
-      shares: 45231,
-      featured: false,
-      trending: true,
-      isNewContent: true,
-      isExclusive: true,
-      downloadAllowed: true,
-      cast: [
-        { name: 'Raj Sharma', role: 'Lead Actor', character: 'Arjun Oberoi' },
-        { name: 'Priya Patel', role: 'Lead Actress', character: 'Ananya' }
-      ],
-      crew: [{ name: 'Anil Verma', role: 'Director' }],
-      director: 'Anil Verma',
-      producer: 'Karan Joshi',
-      studio: 'Story TV Originals',
-      country: 'India',
-      tags: ['billionaire', 'romance', 'office-romance', 'original'],
-      imdbRating: 8.9,
-      maturityContent: ['Romantic Situations', 'Mild Language'],
-      seasons: 2,
-      sections: ['ceo-billionaire', 'binge-worthy'],
-      planRequired: 'free',
-      createdAt: daysAgo(30),
-      updatedAt: daysAgo(15),
-    },
-    {
-      title: 'Love Affairs',
-      type: 'series',
-      contentType: 'drama',
-      description: 'Three friends navigate complex relationships and hidden passions in modern Mumbai.',
-      shortDescription: 'A tale of love and friendship',
-      thumbnail: 'https://images.unsplash.com/photo-1516571748831-5d81767b788d?w=400&h=600&fit=crop&q=80',
-      bannerImage: 'https://images.unsplash.com/photo-1492633423870-43d1cd2775eb?w=1200&h=600&fit=crop&q=80',
-      genres: ['Romance', 'Drama'],
-      languages: ['Hindi'],
-      subtitleLanguages: ['Hindi', 'English'],
-      audioLanguages: ['Hindi'],
-      year: 2024,
-      rating: 'TV-MA',
-      ageRating: 17,
-      status: 'published',
-      hlsUrl: 'https://example.com/hls/love-affairs/master.m3u8',
-      views: 3241520,
-      likes: 89234,
-      shares: 28341,
-      featured: false,
-      trending: true,
-      isNewContent: true,
-      isExclusive: false,
-      downloadAllowed: true,
-      cast: [
-        { name: 'Neha Singh', role: 'Lead Actress', character: 'Riya' },
-        { name: 'Rahul Mehta', role: 'Lead Actor', character: 'Dev' }
-      ],
-      crew: [{ name: 'Sneha Kapoor', role: 'Director' }],
-      director: 'Sneha Kapoor',
-      studio: 'Story TV',
-      country: 'India',
-      tags: ['love-triangle', 'modern-love', 'drama'],
-      imdbRating: 8.4,
-      maturityContent: ['Adult Content', 'Strong Language'],
-      seasons: 1,
-      sections: ['love-affairs', 'story-tv-specials'],
-      planRequired: 'free',
-      createdAt: daysAgo(45),
-      updatedAt: daysAgo(10),
-    },
-    {
-      title: 'Binge Worthy Series',
-      type: 'series',
-      contentType: 'drama',
-      description: 'A gripping thriller that will keep you on the edge of your seat with every episode.',
-      shortDescription: 'A thriller you can\'t miss',
-      thumbnail: 'https://images.unsplash.com/photo-1478720568477-152d9b164e63?w=400&h=600&fit=crop&q=80',
-      bannerImage: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&h=600&fit=crop&q=80',
-      genres: ['Thriller', 'Drama'],
-      languages: ['Hindi', 'Tamil'],
-      subtitleLanguages: ['Hindi', 'Tamil', 'English'],
-      audioLanguages: ['Hindi', 'Tamil'],
-      year: 2024,
-      rating: 'TV-MA',
-      ageRating: 17,
-      status: 'published',
-      hlsUrl: 'https://example.com/hls/binge-worthy/master.m3u8',
-      views: 7241890,
-      likes: 214567,
-      shares: 67234,
-      featured: true,
-      trending: true,
-      isNewContent: false,
-      isExclusive: true,
-      downloadAllowed: true,
-      cast: [
-        { name: 'Vikram Rathod', role: 'Lead Actor', character: 'Inspector Arjun' },
-        { name: 'Anita Desai', role: 'Lead Actress', character: 'Maya' }
-      ],
-      crew: [{ name: 'Rakesh Omprakash', role: 'Director' }],
-      director: 'Rakesh Omprakash',
-      studio: 'Story TV Originals',
-      country: 'India',
-      tags: ['thriller', 'crime', 'must-watch'],
-      imdbRating: 9.2,
-      maturityContent: ['Violence', 'Strong Language'],
-      seasons: 3,
-      sections: ['binge-worthy', 'top-dramas'],
-      planRequired: 'basic',
-      createdAt: daysAgo(120),
-      updatedAt: daysAgo(20),
-    },
-    {
-      title: 'Story TV Special',
-      type: 'series',
-      contentType: 'drama',
-      description: 'A collection of short stories from the heartland of India, celebrating love and life.',
-      shortDescription: 'Heartwarming short stories',
-      thumbnail: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=400&h=600&fit=crop&q=80',
-      bannerImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&h=600&fit=crop&q=80',
-      genres: ['Drama', 'Family'],
-      languages: ['Hindi', 'Marathi', 'Gujarati'],
-      subtitleLanguages: ['Hindi', 'English'],
-      audioLanguages: ['Hindi'],
-      year: 2024,
-      rating: 'TV-PG',
-      ageRating: 10,
-      status: 'published',
-      hlsUrl: 'https://example.com/hls/story-tv-special/master.m3u8',
-      views: 1892345,
-      likes: 67890,
-      shares: 18234,
-      featured: false,
-      trending: false,
-      isNewContent: true,
-      isExclusive: true,
-      downloadAllowed: false,
-      cast: [
-        { name: 'Various', role: 'Ensemble Cast' }
-      ],
-      crew: [{ name: 'Multiple', role: 'Directors' }],
-      studio: 'Story TV Originals',
-      country: 'India',
-      tags: ['family', 'special', 'heartwarming'],
-      imdbRating: 8.1,
-      maturityContent: [],
-      seasons: 1,
-      sections: ['story-tv-specials'],
-      planRequired: 'free',
-      createdAt: daysAgo(15),
-      updatedAt: daysAgo(5),
-    },
-    {
-      title: 'Top Drama of All Time',
-      type: 'series',
-      contentType: 'drama',
-      description: 'An epic saga of love, betrayal, and redemption spanning three generations.',
-      shortDescription: 'An epic family saga',
-      thumbnail: 'https://images.unsplash.com/photo-1460186141667-b3180f76e83b?w=400&h=600&fit=crop&q=80',
-      bannerImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=1200&h=600&fit=crop&q=80',
-      genres: ['Drama', 'Romance'],
-      languages: ['Hindi', 'English'],
-      subtitleLanguages: ['Hindi', 'English', 'Tamil'],
-      audioLanguages: ['Hindi', 'English'],
-      year: 2023,
-      rating: 'TV-MA',
-      ageRating: 17,
-      status: 'published',
-      hlsUrl: 'https://example.com/hls/top-drama/master.m3u8',
-      views: 9876543,
-      likes: 345678,
-      shares: 123456,
-      featured: true,
-      trending: true,
-      isNewContent: false,
-      isExclusive: true,
-      downloadAllowed: true,
-      cast: [
-        { name: 'Amitabh Khan', role: 'Lead Actor', character: 'Raj' },
-        { name: 'Deepika Kapoor', role: 'Lead Actress', character: 'Simran' }
-      ],
-      crew: [{ name: 'Karan Johar', role: 'Director' }],
-      director: 'Karan Johar',
-      studio: 'Story TV Originals',
-      country: 'India',
-      tags: ['epic', 'family-saga', 'classic'],
-      imdbRating: 9.5,
-      maturityContent: ['Adult Themes', 'Violence'],
-      seasons: 5,
-      sections: ['top-dramas', 'top-10-story-tv', 'binge-worthy'],
-      planRequired: 'premium',
-      createdAt: daysAgo(365),
-      updatedAt: daysAgo(100),
-    },
+  const dramaData = [
+    { title: 'CEO Billionaire', genre: 'Romance', views: 5647293, daysOld: 30, trending: true, isNew: true, featured: false },
+    { title: 'Love Affairs', genre: 'Romance', views: 3241520, daysOld: 45, trending: true, isNew: true, featured: false },
+    { title: 'Binge Worthy Series', genre: 'Thriller', views: 7241890, daysOld: 120, trending: true, isNew: false, featured: true },
+    { title: 'Story TV Special', genre: 'Family', views: 1892345, daysOld: 15, trending: false, isNew: true, featured: false },
+    { title: 'Top Drama of All Time', genre: 'Epic', views: 9876543, daysOld: 365, trending: true, isNew: false, featured: true },
+    { title: 'Royal Affair', genre: 'Romance', views: 4500000, daysOld: 25, trending: true, isNew: true, featured: false },
+    { title: 'Mystery Mansion', genre: 'Thriller', views: 6700000, daysOld: 60, trending: true, isNew: false, featured: true },
+    { title: 'Small Town Dreams', genre: 'Drama', views: 2300000, daysOld: 80, trending: false, isNew: true, featured: false },
+    { title: 'College Days', genre: 'Romance', views: 3800000, daysOld: 40, trending: true, isNew: true, featured: false },
+    { title: 'Crime Patrol', genre: 'Crime', views: 8200000, daysOld: 150, trending: true, isNew: false, featured: true },
+    { title: 'Love in Paris', genre: 'Romance', views: 1900000, daysOld: 10, trending: true, isNew: true, featured: false },
+    { title: 'The Heist', genre: 'Thriller', views: 5400000, daysOld: 70, trending: true, isNew: false, featured: false },
+    { title: 'Family Secrets', genre: 'Drama', views: 2700000, daysOld: 90, trending: false, isNew: true, featured: false },
+    { title: 'Village Life', genre: 'Family', views: 1500000, daysOld: 5, trending: false, isNew: true, featured: false },
+    { title: 'Secret Agent', genre: 'Action', views: 7500000, daysOld: 110, trending: true, isNew: false, featured: true },
+    { title: 'First Love', genre: 'Romance', views: 3100000, daysOld: 35, trending: true, isNew: true, featured: false },
+    { title: 'Dark Waters', genre: 'Thriller', views: 4900000, daysOld: 55, trending: true, isNew: false, featured: false },
+    { title: 'Wedding Season', genre: 'Romance', views: 2200000, daysOld: 20, trending: true, isNew: true, featured: false },
+    { title: 'Urban Legends', genre: 'Horror', views: 3600000, daysOld: 100, trending: false, isNew: false, featured: false },
+    { title: 'The Inheritance', genre: 'Drama', views: 4200000, daysOld: 65, trending: true, isNew: false, featured: false },
+    { title: 'Coffee Shop Tales', genre: 'Romance', views: 1700000, daysOld: 12, trending: true, isNew: true, featured: false },
+    { title: 'Ghost Stories', genre: 'Horror', views: 2800000, daysOld: 130, trending: false, isNew: false, featured: false },
+    { title: 'Sports Drama', genre: 'Sports', views: 5100000, daysOld: 48, trending: true, isNew: false, featured: false },
+    { title: 'Star Crossed', genre: 'Romance', views: 2400000, daysOld: 8, trending: true, isNew: true, featured: false },
+    { title: 'Detective X', genre: 'Crime', views: 6300000, daysOld: 85, trending: true, isNew: false, featured: true },
+    { title: 'Modern Family', genre: 'Family', views: 1600000, daysOld: 18, trending: false, isNew: true, featured: false },
+    { title: 'High School Reunion', genre: 'Romance', views: 2000000, daysOld: 28, trending: true, isNew: true, featured: false },
+    { title: 'Time Traveler', genre: 'Sci-Fi', views: 4700000, daysOld: 75, trending: true, isNew: false, featured: false },
+    { title: 'The Promise', genre: 'Drama', views: 3300000, daysOld: 50, trending: false, isNew: false, featured: false },
+    { title: 'Summer Camp', genre: 'Romance', views: 1950000, daysOld: 14, trending: true, isNew: true, featured: false },
+    { title: 'Medical Emergency', genre: 'Drama', views: 4100000, daysOld: 95, trending: true, isNew: false, featured: false },
+    { title: 'Forbidden Love', genre: 'Romance', views: 5800000, daysOld: 32, trending: true, isNew: true, featured: false },
+    { title: 'Haunted House', genre: 'Horror', views: 3000000, daysOld: 115, trending: false, isNew: false, featured: false },
+    { title: 'Startup Dreams', genre: 'Drama', views: 2600000, daysOld: 38, trending: false, isNew: true, featured: false },
+    { title: 'Beach Romance', genre: 'Romance', views: 2100000, daysOld: 6, trending: true, isNew: true, featured: false },
+    { title: 'Political Thriller', genre: 'Thriller', views: 6900000, daysOld: 140, trending: true, isNew: false, featured: true },
+    { title: 'Music School', genre: 'Drama', views: 1800000, daysOld: 22, trending: false, isNew: true, featured: false },
   ];
+
+  const thumbnails = [
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1516571748831-5d81767b788d?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1478720568477-152d9b164e63?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1460186141667-b3180f76e83b?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=400&h=600&fit=crop&q=80',
+  ];
+
+  const content = dramaData.map((drama, index) => {
+    const allSections = [
+      'top-10-story-tv', 'ceo-billionaire', 'just-launched', 'love-affairs', 
+      'binge-worthy', 'story-tv-specials', 'top-10-new-releases', 'top-dramas',
+      'royal-affair', 'mystery-mansion', 'small-town-dreams', 'college-days',
+      'crime-patrol', 'love-in-paris', 'the-heist', 'family-secrets'
+    ];
+    
+    // Assign 2-4 sections per drama, distribute across all sections
+    const numSections = 2 + (index % 3);
+    let assignedSections: string[] = [];
+    for (let i = 0; i < numSections; i++) {
+      const sectionIndex = (index + i) % allSections.length;
+      assignedSections.push(allSections[sectionIndex]);
+    }
+    assignedSections = [...new Set(assignedSections)]; // Remove duplicates
+    
+    return {
+      title: drama.title,
+      type: 'series',
+      contentType: 'drama',
+      description: `A captivating ${drama.genre.toLowerCase()} drama that will keep you hooked from the first episode.`,
+      shortDescription: `${drama.genre} drama you won't forget`,
+      thumbnail: thumbnails[index % thumbnails.length],
+      bannerImage: thumbnails[(index + 2) % thumbnails.length].replace('w=400&h=600', 'w=1200&h=600'),
+      genres: [drama.genre, 'Drama'],
+      languages: ['Hindi', 'English'],
+      subtitleLanguages: ['Hindi', 'English'],
+      audioLanguages: ['Hindi'],
+      year: 2023 + (index % 2),
+      rating: index % 3 === 0 ? 'TV-MA' : (index % 3 === 1 ? 'TV-14' : 'TV-PG'),
+      ageRating: index % 3 === 0 ? 17 : (index % 3 === 1 ? 13 : 10),
+      status: 'published',
+      hlsUrl: `https://example.com/hls/${drama.title.toLowerCase().replace(/ /g, '-')}/master.m3u8`,
+      views: drama.views,
+      likes: Math.floor(drama.views * 0.08),
+      shares: Math.floor(drama.views * 0.02),
+      featured: drama.featured,
+      trending: drama.trending,
+      isNewContent: drama.isNew,
+      isExclusive: index % 4 === 0,
+      downloadAllowed: index % 2 === 0,
+      cast: [
+        { name: 'Actor ' + (index + 1), role: 'Lead Actor', character: 'Hero ' + (index + 1) },
+        { name: 'Actress ' + (index + 1), role: 'Lead Actress', character: 'Heroine ' + (index + 1) }
+      ],
+      crew: [{ name: 'Director ' + (index + 1), role: 'Director' }],
+      director: 'Director ' + (index + 1),
+      producer: 'Producer ' + (index + 1),
+      studio: 'Story TV Originals',
+      country: 'India',
+      tags: [drama.genre.toLowerCase(), 'drama', 'must-watch'],
+      imdbRating: 7.5 + (index % 20) / 10,
+      maturityContent: index % 3 === 0 ? ['Violence', 'Strong Language'] : [],
+      seasons: 1 + (index % 3),
+      sections: assignedSections,
+      planRequired: index % 4 === 0 ? 'premium' : (index % 4 === 1 ? 'basic' : 'free'),
+      createdAt: daysAgo(drama.daysOld),
+      updatedAt: daysAgo(drama.daysOld - Math.min(10, drama.daysOld)),
+    };
+  });
 
   await ContentModel.insertMany(content);
   logger.info('Seeded sample short dramas');
@@ -533,7 +434,7 @@ async function seedEpisodes() {
           episode: i,
           isFree: true,
           isLocked: false,
-          hlsUrl: `https://example.com/hls/${item.title.toLowerCase().replace(/ /g, '-')}/ep${i}/master.m3u8`,
+          hlsUrl: `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`, // Public test stream URL
           views: Math.floor(Math.random() * 1000000),
           downloadAllowed: false,
           subtitleLanguages: [],
@@ -638,6 +539,39 @@ async function seedBanners() {
 
   await BannerModel.insertMany(banners);
   logger.info('Seeded sample banners');
+}
+
+async function seedSections() {
+  await SectionModel.deleteMany({});
+
+  const dramaSections = [
+    { key: 'top-10-story-tv', title: 'Top 10 on Story TV', contentType: 'drama', sortBy: { views: -1 }, limit: 10, position: 1, isActive: true },
+    { key: 'ceo-billionaire', title: 'CEO Billionaire', contentType: 'drama', filter: { sections: 'ceo-billionaire' }, sortBy: { createdAt: -1 }, limit: 10, position: 2, isActive: true },
+    { key: 'just-launched', title: 'Just Launched', contentType: 'drama', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10, position: 3, isActive: true },
+    { key: 'love-affairs', title: 'Love Affairs', contentType: 'drama', filter: { sections: 'love-affairs' }, sortBy: { views: -1 }, limit: 10, position: 4, isActive: true },
+    { key: 'binge-worthy', title: 'Binge Worthy Series', contentType: 'drama', filter: { sections: 'binge-worthy' }, sortBy: { views: -1 }, limit: 10, position: 5, isActive: true },
+    { key: 'story-tv-specials', title: 'Story TV Specials', contentType: 'drama', filter: { sections: 'story-tv-specials' }, sortBy: { views: -1 }, limit: 10, position: 6, isActive: true },
+    { key: 'top-10-new-releases', title: 'Top 10 New Releases', contentType: 'drama', filter: { isNewContent: true }, sortBy: { views: -1 }, limit: 10, position: 7, isActive: true },
+    { key: 'top-dramas', title: 'Top Dramas Of All Time', contentType: 'drama', sortBy: { views: -1 }, limit: 10, position: 8, isActive: true },
+    { key: 'royal-affair', title: 'Royal Affair', contentType: 'drama', filter: { sections: 'royal-affair' }, sortBy: { views: -1 }, limit: 10, position: 9, isActive: true },
+    { key: 'mystery-mansion', title: 'Mystery Mansion', contentType: 'drama', filter: { sections: 'mystery-mansion' }, sortBy: { views: -1 }, limit: 10, position: 10, isActive: true },
+    { key: 'small-town-dreams', title: 'Small Town Dreams', contentType: 'drama', filter: { sections: 'small-town-dreams' }, sortBy: { views: -1 }, limit: 10, position: 11, isActive: true },
+    { key: 'college-days', title: 'College Days', contentType: 'drama', filter: { sections: 'college-days' }, sortBy: { views: -1 }, limit: 10, position: 12, isActive: true },
+    { key: 'crime-patrol', title: 'Crime Patrol', contentType: 'drama', filter: { sections: 'crime-patrol' }, sortBy: { views: -1 }, limit: 10, position: 13, isActive: true },
+    { key: 'love-in-paris', title: 'Love in Paris', contentType: 'drama', filter: { sections: 'love-in-paris' }, sortBy: { views: -1 }, limit: 10, position: 14, isActive: true },
+    { key: 'the-heist', title: 'The Heist', contentType: 'drama', filter: { sections: 'the-heist' }, sortBy: { views: -1 }, limit: 10, position: 15, isActive: true },
+    { key: 'family-secrets', title: 'Family Secrets', contentType: 'drama', filter: { sections: 'family-secrets' }, sortBy: { views: -1 }, limit: 10, position: 16, isActive: true },
+  ];
+
+  const movieSections = [
+    { key: 'featured', title: 'Featured', contentType: 'movie', filter: { featured: true }, sortBy: { createdAt: -1 }, limit: 10, position: 1, isActive: true },
+    { key: 'trending', title: 'Trending', contentType: 'movie', filter: { trending: true }, sortBy: { views: -1 }, limit: 10, position: 2, isActive: true },
+    { key: 'new-releases', title: 'New Releases', contentType: 'movie', filter: { isNewContent: true }, sortBy: { createdAt: -1 }, limit: 10, position: 3, isActive: true },
+    { key: 'top-rated', title: 'Top Rated', contentType: 'movie', sortBy: { views: -1 }, limit: 10, position: 4, isActive: true },
+  ];
+
+  await SectionModel.insertMany([...dramaSections, ...movieSections]);
+  logger.info('Seeded sample sections');
 }
 
 async function seedNotificationTemplates() {
@@ -826,6 +760,7 @@ export async function seedDatabase(): Promise<void> {
     await seedMovies();
     await seedEpisodes();
     await seedBanners();
+    await seedSections();
     
     await Promise.all([
       seedNotificationTemplates(),
