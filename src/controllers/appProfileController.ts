@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { UserModel } from '../models/User';
 import { ContentModel } from '../models/Content';
 import { LanguageModel } from '../models/Language';
+import { SettingsModel } from '../models/Settings';
 import mongoose from 'mongoose';
 import { PageModel } from '../models/Page';
 import { UserDownloadModel } from '../models/UserDownload';
@@ -46,9 +47,17 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
     if (userId) {
       const user = await UserModel.findById(userId).lean();
       if (user) {
+        // Calculate user sequential number and dynamically format Display ID
+        const userNumber = await UserModel.countDocuments({ _id: { $lte: user._id } });
+        const settings = await SettingsModel.findOne().lean();
+        const appName = settings?.platformName || 'XOTO';
+        const prefix = appName.substring(0, 4).toUpperCase();
+        const displayId = `${prefix}${String(userNumber).padStart(4, '0')}`;
+
         const isActive = user.subscriptionStatus === 'active' && (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
         userProfile = {
           id: user._id.toString(),
+          displayId,
           name: user.name,
           phone: user.phone || null,
           email: user.email || null,
