@@ -70,7 +70,7 @@ const buildVideoSettings = (hlsUrl: string | null, qualities: any[] = []) => {
     autoUrl; // fall back to the adaptive HLS stream, NOT to a higher-res MP4
 
   return [
-    { key: 'auto', label: 'Auto (Recommended)', description: 'Adjusts the video quality to give you the best experience for your conditions', url: autoUrl },
+    { key: 'auto', label: 'Auto', description: 'Adjusts the video quality to give you the best experience for your conditions', url: autoUrl },
     { key: 'best', label: 'Best Quality', description: 'Best watching experience, uses more data', url: bestUrl },
     { key: 'dataSaver', label: 'Data Saver', description: 'Lower video quality, saves data', url: dataSaverUrl },
   ];
@@ -296,6 +296,14 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         },
         currentEpisode,
         seasons,
+        playbackSpeeds: [
+          { value: 0.75, label: '0.75x' },
+          { value: 1.0, label: 'Normal' },
+          { value: 1.25, label: '1.25x' },
+          { value: 1.5, label: '1.5x' },
+          { value: 1.75, label: '1.75x' },
+          { value: 2.0, label: '2.0x' }
+        ],
         userAccess: {
           isLoggedIn: !!userId,
           userPlan,

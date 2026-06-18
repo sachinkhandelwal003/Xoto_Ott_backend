@@ -117,7 +117,7 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
 
     const videoSettings = hlsUrl
       ? [
-          { key: 'auto', label: 'Auto (Recommended)', description: 'Adjusts quality automatically', url: hlsUrl },
+          { key: 'auto', label: 'Auto', description: 'Adjusts quality automatically', url: hlsUrl },
           ...qualities.map((q: any) => {
             const sizeMB = q.size ? `${Math.round(q.size / (1024 * 1024))} MB` : 'N/A';
             return {
@@ -151,6 +151,14 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
         // Video
         hlsUrl,
         videoSettings,
+        playbackSpeeds: [
+          { value: 0.75, label: '0.75x' },
+          { value: 1.0, label: 'Normal' },
+          { value: 1.25, label: '1.25x' },
+          { value: 1.5, label: '1.5x' },
+          { value: 1.75, label: '1.75x' },
+          { value: 2.0, label: '2.0x' }
+        ],
         isLocked: movie.planRequired !== 'free',
 
         // Meta
