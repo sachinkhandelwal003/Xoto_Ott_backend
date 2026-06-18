@@ -5,6 +5,7 @@ import { ContentModel } from '../models/Content';
 import { UserLikeModel } from '../models/UserLike';
 import { UserWishlistModel } from '../models/UserWishlist';
 import { UserWatchProgressModel } from '../models/UserWatchProgress';
+import { UserDownloadModel } from '../models/UserDownload';
 import { logger } from '../lib/logger';
 
 import { buildShareUrl } from '../lib/config';
@@ -47,19 +48,24 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(404).send({ success: false, message: 'Movie not found.' });
     }
 
-    // ── 2. User-specific flags (like + wishlist + watch progress) ─────────────
+    // ── 2. User-specific flags (like + wishlist + watch progress + download) ───
     let isLikedByUser = false;
     let isWishlisted = false;
     let watchProgress = null;
+    let downloaded = false;
+    let isDownloaded = false;
 
     if (userId) {
-      const [likeDoc, wishlistDoc, progressDoc] = await Promise.all([
+      const [likeDoc, wishlistDoc, progressDoc, downloadDoc] = await Promise.all([
         UserLikeModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
         UserWishlistModel.findOne({ userId, contentId: movie._id }).lean(),
         UserWatchProgressModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
+        UserDownloadModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
       ]);
       isLikedByUser = !!likeDoc;
       isWishlisted = !!wishlistDoc;
+      downloaded = !!downloadDoc;
+      isDownloaded = !!downloadDoc;
       if (progressDoc) {
         watchProgress = {
           progressSeconds: progressDoc.progressSeconds,
@@ -200,6 +206,8 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
         isLikedByUser,
         isWishlisted,
         watchProgress,
+        downloaded,
+        isDownloaded,
 
         // Share
         shareUrl: buildShareUrl(movie._id.toString()),

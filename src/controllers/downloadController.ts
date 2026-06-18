@@ -55,6 +55,7 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
     let thumbnail = '';
     let duration = 0;
     let contentModelType: 'Movie' | 'Content' = 'Movie';
+    let downloadDoc: any = null;
 
     if (contentType === 'movie') {
       const movie = await MovieModel.findById(contentId).lean();
@@ -80,7 +81,7 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       contentModelType = 'Movie';
 
       // Upsert download record
-      await UserDownloadModel.findOneAndUpdate(
+      downloadDoc = await UserDownloadModel.findOneAndUpdate(
         { userId, contentId, episodeId: null },
         { contentModelType },
         { upsert: true, new: true }
@@ -127,7 +128,7 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       contentModelType = 'Content';
 
       // Upsert download record
-      await UserDownloadModel.findOneAndUpdate(
+      downloadDoc = await UserDownloadModel.findOneAndUpdate(
         { userId, contentId, episodeId },
         { contentModelType },
         { upsert: true, new: true }
@@ -138,6 +139,8 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       success: true,
       message: 'Download request authorized successfully.',
       data: {
+        id: downloadDoc?._id?.toString() || null,
+        type: contentType,
         title,
         parentTitle: parentTitle || undefined,
         contentType,
