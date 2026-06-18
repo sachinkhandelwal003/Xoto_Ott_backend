@@ -5,6 +5,7 @@ import { MovieModel } from '../models/Movie';
 import { EpisodeModel } from '../models/Episode';
 import { UserLikeModel } from '../models/UserLike';
 import { UserModel } from '../models/User';
+import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import '../models/Actor';
 import '../models/Director';
 import { logger } from '../lib/logger';
@@ -81,9 +82,6 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     const { contentId } = request.params as { contentId: string };
     const query = request.query as { season?: string; episode?: string };
 
-    const requestedSeason = Math.max(1, Number(query.season || 1));
-    const requestedEpisode = Math.max(1, Number(query.episode || 1));
-
     if (!mongoose.Types.ObjectId.isValid(contentId)) {
       return reply.status(400).send({ success: false, message: 'Invalid contentId.' });
     }
@@ -91,6 +89,27 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     const userInfo = await getOptionalUser(request);
     const userId = userInfo?.userId || null;
     const userPlan = userInfo?.userPlan || 'free';
+
+    let requestedSeason = query.season ? Math.max(1, Number(query.season)) : null;
+    let requestedEpisode = query.episode ? Math.max(1, Number(query.episode)) : null;
+
+    // Default to last watched episode if user is logged in and query is not specified
+    if (userId && (requestedSeason === null || requestedEpisode === null)) {
+      const lastProgress = await UserWatchProgressModel.findOne({ userId, contentId })
+        .sort({ lastWatchedAt: -1 })
+        .populate('episodeId')
+        .lean();
+      
+      if (lastProgress && lastProgress.episodeId) {
+        const epDoc = lastProgress.episodeId as any;
+        if (requestedSeason === null) requestedSeason = epDoc.season;
+        if (requestedEpisode === null) requestedEpisode = epDoc.episode;
+      }
+    }
+
+    // Default to Season 1, Episode 1 if still not determined
+    if (requestedSeason === null) requestedSeason = 1;
+    if (requestedEpisode === null) requestedEpisode = 1;
 
     // ── 1. Check if Series/Drama ──────────────────────────────────────────────
     let content: any = await ContentModel.findById(contentId).lean();
@@ -175,6 +194,19 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     if (isMovieType) {
       const isAccessible = canAccessItem(contentPlan === 'free', contentPlan !== 'free', contentPlan, userPlan);
       
+      let watchProgress = null;
+      if (userId) {
+        const progressDoc = await UserWatchProgressModel.findOne({ userId, contentId: content._id, episodeId: null }).lean();
+        if (progressDoc) {
+          watchProgress = {
+            progressSeconds: progressDoc.progressSeconds,
+            durationSeconds: progressDoc.durationSeconds,
+            progressPercent: progressDoc.progressPercent,
+            lastWatchedAt: progressDoc.lastWatchedAt,
+          };
+        }
+      }
+
       currentEpisode = {
         id: content._id.toString(),
         title: content.title,
@@ -184,6 +216,7 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         hlsUrl: isAccessible ? content.hlsUrl || null : null,
         trailerUrl: content.trailerUrl || null,
         videoSettings: isAccessible ? buildVideoSettings(content.hlsUrl, content.videoQualities) : null,
+        watchProgress,
       };
 
       const hours = content.duration ? Math.floor(content.duration / 3600) : 0;
@@ -248,8 +281,6 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
       if (currentEpisodeRaw) {
         currentEpisode = mapEpisode(currentEpisodeRaw);
         if (!currentEpisode.isLocked) {
-          // Use the episode's own videoQualities — NOT content.videoQualities which
-          // belongs to the parent series and would give wrong URLs per episode.
           currentEpisode.videoSettings = buildVideoSettings(
             currentEpisodeRaw.hlsUrl,
             currentEpisodeRaw.videoQualities || []
@@ -257,6 +288,24 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         } else {
           currentEpisode.videoSettings = null;
         }
+
+        let watchProgress = null;
+        if (userId) {
+          const progressDoc = await UserWatchProgressModel.findOne({
+            userId,
+            contentId: content._id,
+            episodeId: currentEpisodeRaw._id,
+          }).lean();
+          if (progressDoc) {
+            watchProgress = {
+              progressSeconds: progressDoc.progressSeconds,
+              durationSeconds: progressDoc.durationSeconds,
+              progressPercent: progressDoc.progressPercent,
+              lastWatchedAt: progressDoc.lastWatchedAt,
+            };
+          }
+        }
+        currentEpisode.watchProgress = watchProgress;
       }
     }
 

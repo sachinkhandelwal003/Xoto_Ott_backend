@@ -4,6 +4,7 @@ import { MovieModel } from '../models/Movie';
 import { ContentModel } from '../models/Content';
 import { UserLikeModel } from '../models/UserLike';
 import { UserWishlistModel } from '../models/UserWishlist';
+import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import { logger } from '../lib/logger';
 
 import { buildShareUrl } from '../lib/config';
@@ -46,17 +47,27 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(404).send({ success: false, message: 'Movie not found.' });
     }
 
-    // ── 2. User-specific flags (like + wishlist) ──────────────────────────────
+    // ── 2. User-specific flags (like + wishlist + watch progress) ─────────────
     let isLikedByUser = false;
     let isWishlisted = false;
+    let watchProgress = null;
 
     if (userId) {
-      const [likeDoc, wishlistDoc] = await Promise.all([
+      const [likeDoc, wishlistDoc, progressDoc] = await Promise.all([
         UserLikeModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
         UserWishlistModel.findOne({ userId, contentId: movie._id }).lean(),
+        UserWatchProgressModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
       ]);
       isLikedByUser = !!likeDoc;
       isWishlisted = !!wishlistDoc;
+      if (progressDoc) {
+        watchProgress = {
+          progressSeconds: progressDoc.progressSeconds,
+          durationSeconds: progressDoc.durationSeconds,
+          progressPercent: progressDoc.progressPercent,
+          lastWatchedAt: progressDoc.lastWatchedAt,
+        };
+      }
     }
 
     // ── 3. Related Movies (same genre, limit 10) ──────────────────────────────
@@ -188,6 +199,7 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
         // User flags
         isLikedByUser,
         isWishlisted,
+        watchProgress,
 
         // Share
         shareUrl: buildShareUrl(movie._id.toString()),

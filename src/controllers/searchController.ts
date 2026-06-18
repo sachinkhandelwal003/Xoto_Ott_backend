@@ -39,6 +39,60 @@ const mapSearchItem = (item: any, type: 'movie' | 'drama' | 'series') => ({
   updatedAt: item.updatedAt,
 });
 
+export const getRecommendations = async (preferredLanguage: string) => {
+  // Resolve language ID for movies
+  let targetLanguageId: mongoose.Types.ObjectId | null = null;
+  if (preferredLanguage) {
+    const langDoc = await LanguageModel.findOne({ name: new RegExp(`^${preferredLanguage}$`, 'i') }).lean();
+    if (langDoc) {
+      targetLanguageId = langDoc._id as mongoose.Types.ObjectId;
+    }
+  }
+
+  // Fetch recommended movies (language filtered)
+  const movieFilter: any = { status: 'published' };
+  if (targetLanguageId) movieFilter.languages = targetLanguageId;
+  let recMovies = await MovieModel.find(movieFilter)
+    .sort({ views: -1, createdAt: -1 })
+    .limit(6)
+    .lean();
+
+  // Fallback for movies if no match in target language
+  if (recMovies.length === 0 && targetLanguageId) {
+    recMovies = await MovieModel.find({ status: 'published' })
+      .sort({ views: -1, createdAt: -1 })
+      .limit(6)
+      .lean();
+  }
+
+  // Fetch recommended dramas/series (language filtered)
+  const dramaFilter: any = { status: 'published', type: 'series' };
+  if (preferredLanguage) dramaFilter.languages = preferredLanguage;
+  let recDramas = await ContentModel.find(dramaFilter)
+    .sort({ views: -1, createdAt: -1 })
+    .limit(6)
+    .lean();
+
+  // Fallback for dramas if no match in target language
+  if (recDramas.length === 0 && preferredLanguage) {
+    recDramas = await ContentModel.find({ status: 'published', type: 'series' })
+      .sort({ views: -1, createdAt: -1 })
+      .limit(6)
+      .lean();
+  }
+
+  // Merge and map recommendations
+  const recommendationsList = [
+    ...recMovies.map(m => mapSearchItem(m, 'movie')),
+    ...recDramas.map(d => mapSearchItem(d, d.contentType === 'drama' ? 'drama' : 'series'))
+  ];
+
+  // Sort recommendations by views to make them look uniform
+  recommendationsList.sort((a, b) => b.views - a.views);
+
+  return recommendationsList.slice(0, 12);
+};
+
 export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const query = request.query as { q?: string };
@@ -81,63 +135,14 @@ export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply
       popularDramas.forEach(d => trendingSearchesSet.add(d.title));
       const trendingSearches = Array.from(trendingSearchesSet).slice(0, 6);
 
-      // B. Fetch Recommended For You (personalized by preferred language)
-      // Resolve language ID for movies
-      let targetLanguageId: mongoose.Types.ObjectId | null = null;
-      if (preferredLanguage) {
-        const langDoc = await LanguageModel.findOne({ name: new RegExp(`^${preferredLanguage}$`, 'i') }).lean();
-        if (langDoc) {
-          targetLanguageId = langDoc._id as mongoose.Types.ObjectId;
-        }
-      }
-
-      // Fetch recommended movies (language filtered)
-      const movieFilter: any = { status: 'published' };
-      if (targetLanguageId) movieFilter.languages = targetLanguageId;
-      let recMovies = await MovieModel.find(movieFilter)
-        .sort({ views: -1, createdAt: -1 })
-        .limit(6)
-        .lean();
-
-      // Fallback for movies if no match in target language
-      if (recMovies.length === 0 && targetLanguageId) {
-        recMovies = await MovieModel.find({ status: 'published' })
-          .sort({ views: -1, createdAt: -1 })
-          .limit(6)
-          .lean();
-      }
-
-      // Fetch recommended dramas/series (language filtered)
-      const dramaFilter: any = { status: 'published', type: 'series' };
-      if (preferredLanguage) dramaFilter.languages = preferredLanguage;
-      let recDramas = await ContentModel.find(dramaFilter)
-        .sort({ views: -1, createdAt: -1 })
-        .limit(6)
-        .lean();
-
-      // Fallback for dramas if no match in target language
-      if (recDramas.length === 0 && preferredLanguage) {
-        recDramas = await ContentModel.find({ status: 'published', type: 'series' })
-          .sort({ views: -1, createdAt: -1 })
-          .limit(6)
-          .lean();
-      }
-
-      // Merge and map recommendations
-      const recommendationsList = [
-        ...recMovies.map(m => mapSearchItem(m, 'movie')),
-        ...recDramas.map(d => mapSearchItem(d, d.contentType === 'drama' ? 'drama' : 'series'))
-      ];
-
-      // Sort recommendations by views to make them look uniform
-      recommendationsList.sort((a, b) => b.views - a.views);
+      const recommendations = await getRecommendations(preferredLanguage);
 
       return reply.send({
         success: true,
         data: {
           isQueryEmpty: true,
           trendingSearches,
-          recommendations: recommendationsList.slice(0, 12),
+          recommendations,
         }
       });
     }
@@ -183,6 +188,19 @@ export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply
 
     // Sort search results by views/popularity
     results.sort((a, b) => b.views - a.views);
+
+    if (results.length === 0) {
+      const recommendations = await getRecommendations(preferredLanguage);
+      return reply.send({
+        success: true,
+        data: {
+          isQueryEmpty: false,
+          results: [],
+          message: 'No match found',
+          recommendations
+        }
+      });
+    }
 
     return reply.send({
       success: true,

@@ -7,6 +7,7 @@ import { SectionModel } from '../models/Section';
 import { UserLikeModel } from '../models/UserLike';
 import { UserModel } from '../models/User';
 import { LanguageModel } from '../models/Language';
+import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import { logger } from '../lib/logger';
 import mongoose from 'mongoose';
 
@@ -228,12 +229,26 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     const sectionsWithContent = await Promise.all(sectionPromises);
 
+    // ── Fetch Continue Watching Progress ──────────────────────────────────────
+    let watchProgressList: any[] = [];
+    if (userId) {
+      watchProgressList = await UserWatchProgressModel.find({
+        userId,
+        contentModelType: tab === 'movie' ? 'Movie' : 'Content',
+      })
+        .sort({ lastWatchedAt: -1 })
+        .limit(10)
+        .populate('episodeId')
+        .lean();
+    }
+
     // ── Aggregate Data (Episodes & Likes) ─────────────────────────────────────
     
-    // Collect all content IDs from banners and sections
+    // Collect all content IDs from banners, sections, and watch progress
     const allContentIdsSet = new Set<string>();
     banners.forEach(b => { if (b.contentId) allContentIdsSet.add(b.contentId._id.toString()); });
     sectionsWithContent.forEach(s => s.content.forEach(c => allContentIdsSet.add(c._id.toString())));
+    watchProgressList.forEach(p => { if (p.contentId) allContentIdsSet.add(p.contentId.toString()); });
     
     const allContentIds = Array.from(allContentIdsSet).map(id => new mongoose.Types.ObjectId(id));
 
@@ -310,6 +325,65 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
         }
       }),
     }));
+
+    // Map Continue Watching section
+    const continueWatchingShows: any[] = [];
+    if (watchProgressList.length > 0) {
+      const contentIds = watchProgressList.map(p => p.contentId);
+      let items: any[] = [];
+      if (tab === 'movie') {
+        items = await MovieModel.find({ _id: { $in: contentIds } }).lean();
+      } else {
+        items = await ContentModel.find({ _id: { $in: contentIds } }).lean();
+      }
+
+      const itemsMap = new Map<string, any>();
+      items.forEach(item => itemsMap.set(item._id.toString(), item));
+
+      for (const progress of watchProgressList) {
+        const item = itemsMap.get(progress.contentId.toString());
+        if (!item) continue;
+
+        const cid = item._id.toString();
+        const likeCount = item.likes || 0;
+        const isLikedByUser = likedContentIdSet.has(cid);
+
+        let mapped: any;
+        if (tab === 'drama') {
+          const episodeCount = episodeCountMap.get(cid) || 0;
+          const firstEpisode = firstEpisodeMap.get(cid);
+          mapped = mapContentItem(item, 'drama', episodeCount, firstEpisode, likeCount, isLikedByUser);
+        } else {
+          mapped = mapContentItem(item, 'movie', 0, undefined, likeCount, isLikedByUser);
+        }
+
+        // Inject watch progress detail
+        mapped.watchProgress = {
+          progressSeconds: progress.progressSeconds,
+          durationSeconds: progress.durationSeconds,
+          progressPercent: progress.progressPercent,
+          lastWatchedAt: progress.lastWatchedAt,
+          episodeId: progress.episodeId ? (progress.episodeId as any)._id?.toString() : null,
+          episodeNumber: progress.episodeId ? (progress.episodeId as any).episode : null,
+          season: progress.episodeId ? (progress.episodeId as any).season : null,
+          episodeTitle: progress.episodeId ? (progress.episodeId as any).title : null,
+        };
+
+        continueWatchingShows.push(mapped);
+      }
+    }
+
+    if (continueWatchingShows.length > 0) {
+      mappedSections.unshift({
+        key: 'continue-watching',
+        title: 'Continue Watching',
+        category: 'Continue Watching',
+        layout: 'horizontal',
+        showViewAll: false,
+        itemType: 'poster',
+        shows: continueWatchingShows,
+      });
+    }
 
     return reply.send({
       success: true,

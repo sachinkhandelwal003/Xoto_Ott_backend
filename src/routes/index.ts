@@ -32,6 +32,7 @@ import shareRoutes from './share';
 import wishlistRoutes from './wishlist';
 import appProfileRoutes from './appProfile';
 import downloadRoutes from './download';
+import watchProgressRoutes from './watchProgress';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 import { getSearchPage } from '../controllers/searchController';
@@ -86,6 +87,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Download routes (POST /download, GET /downloads, DELETE /downloads/:id)
   fastify.register(downloadRoutes, { prefix: '/app' });
+
+  // Watch progress routes (POST /watch/progress, DELETE /watch/progress/:contentId)
+  fastify.register(watchProgressRoutes, { prefix: '/app' });
 
   // Mobile movie detail page
   fastify.get('/app/movies/:id', getMovieDetail);
