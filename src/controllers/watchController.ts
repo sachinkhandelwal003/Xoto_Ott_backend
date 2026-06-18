@@ -17,9 +17,7 @@ const PLAN_LEVELS: Record<string, number> = {
   premium: 3,
 };
 
-const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
-
-const buildShareUrl = (item: any): string => `${API_URL}/share/${item._id.toString()}`;
+import { buildShareUrl } from '../lib/config';
 
 const getOptionalUser = async (request: FastifyRequest): Promise<{ userId: string; userPlan: string } | null> => {
   try {
@@ -290,7 +288,7 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
           views: content.views || 0,
           likeCount: content.likes || 0,
           isLikedByUser,
-          shareUrl: buildShareUrl(content),
+          shareUrl: buildShareUrl(content._id.toString()),
           
           cast,
           crew,

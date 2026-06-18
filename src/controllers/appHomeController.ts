@@ -9,7 +9,7 @@ import { logger } from '../lib/logger';
 import mongoose from 'mongoose';
 
 // Base URL for the backend API (used for smart share links)
-const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
+import { API_URL, buildShareUrl } from '../lib/config';
 
 // Helper: try to extract userId from JWT (optional auth — no error if missing/invalid)
 const getOptionalUserId = (request: FastifyRequest): string | null => {
@@ -25,10 +25,7 @@ const getOptionalUserId = (request: FastifyRequest): string | null => {
   }
 };
 
-// Helper: generate smart share URL pointing to backend redirect endpoint
-const buildShareUrl = (item: any): string => {
-  return `${API_URL}/share/${item._id.toString()}`;
-};
+
 
 // Helper function to map content items
 const mapContentItem = (
@@ -54,7 +51,7 @@ const mapContentItem = (
   likeCount,
   isLikedByUser,
   shares: item.shares || 0,
-  shareUrl: buildShareUrl(item),
+  shareUrl: buildShareUrl(item._id.toString()),
   featured: item.featured,
   trending: item.trending,
   isNewContent: item.isNewContent,

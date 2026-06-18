@@ -25,13 +25,7 @@ const getOptionalUserId = (request: FastifyRequest): string | null => {
   }
 };
 
-// Base URL for the backend API (used for smart share links)
-const API_URL = (process.env.API_URL || 'http://localhost:3000/api').replace(/\/$/, '');
-
-// Helper: generate smart share URL pointing to backend redirect endpoint
-const buildShareUrl = (item: any): string => {
-  return `${API_URL}/share/${item._id.toString()}`;
-};
+import { buildShareUrl } from '../lib/config';
 
 // Helper function to map content items for the explore / short-drama reel feed
 const mapContentItem = (
@@ -57,7 +51,7 @@ const mapContentItem = (
   likeCount,
   isLikedByUser,
   shares: item.shares || 0,
-  shareUrl: buildShareUrl(item),
+  shareUrl: buildShareUrl(item._id.toString()),
   featured: item.featured,
   trending: item.trending,
   isNewContent: item.isNewContent,

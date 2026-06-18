@@ -36,6 +36,7 @@ import { getExplore } from '../controllers/exploreController';
 import { getWebHome } from '../controllers/webHomeController';
 import { getWebBrowse } from '../controllers/webBrowseController';
 import { getWebDetail } from '../controllers/webDetailController';
+import { getMovieDetail } from '../controllers/appMovieController';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -80,6 +81,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // App Profile / Settings route
   fastify.register(appProfileRoutes, { prefix: '/app' });
+
+  // Mobile movie detail page
+  fastify.get('/app/movies/:id', getMovieDetail);
 
   // Home page route for app
   fastify.get('/home', getHomePage);
