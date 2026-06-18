@@ -42,16 +42,34 @@ const getOptionalUser = async (request: FastifyRequest): Promise<{ userId: strin
 const canAccessItem = (isFree: boolean, isLocked: boolean, contentPlanRequired: string, userPlan: string): boolean => {
   if (isFree) return true;
   if (isLocked) {
-    return (PLAN_LEVELS[userPlan] ?? 0) >= (PLAN_LEVELS[contentPlanRequired] ?? 0);
+    // If the episode is locked, the user must have at least a 'basic' plan (level 1), 
+    // or higher if the content itself requires a higher plan
+    const requiredLevel = Math.max(PLAN_LEVELS[contentPlanRequired] ?? 0, 1);
+    return (PLAN_LEVELS[userPlan] ?? 0) >= requiredLevel;
   }
   return true;
 };
 
-// Build standard Video Settings array from hlsUrl and videoQualities
+// Build standard Video Settings array from hlsUrl and per-item videoQualities.
+// Each quality tier falls back to hlsUrl (the item's own adaptive stream) so
+// Data Saver mode always plays the correct video, never a mismatched source.
 const buildVideoSettings = (hlsUrl: string | null, qualities: any[] = []) => {
   const autoUrl = hlsUrl || null;
-  const bestUrl = qualities.find((q: any) => q.quality === '1080p')?.url || qualities.find((q: any) => q.quality === '720p')?.url || autoUrl;
-  const dataSaverUrl = qualities.find((q: any) => q.quality === '360p')?.url || qualities.find((q: any) => q.quality === '144p')?.url || autoUrl;
+
+  // Best quality: prefer 1080p → 720p → 480p → hlsUrl (never null when hlsUrl exists)
+  const bestUrl =
+    qualities.find((q: any) => q.quality === '1080p')?.url ||
+    qualities.find((q: any) => q.quality === '720p')?.url ||
+    qualities.find((q: any) => q.quality === '480p')?.url ||
+    autoUrl;
+
+  // Data saver: prefer 360p → 144p → hlsUrl (same source, adaptive stream)
+  // IMPORTANT: do NOT fall through to bestUrl — that would play a different
+  // resolution stream which may be audio-only or visually wrong.
+  const dataSaverUrl =
+    qualities.find((q: any) => q.quality === '360p')?.url ||
+    qualities.find((q: any) => q.quality === '144p')?.url ||
+    autoUrl; // fall back to the adaptive HLS stream, NOT to a higher-res MP4
 
   return [
     { key: 'auto', label: 'Auto (Recommended)', description: 'Adjusts the video quality to give you the best experience for your conditions', url: autoUrl },
@@ -98,9 +116,11 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     const contentPlan = content.planRequired || 'free';
 
     // ── 3. Handle Like Status ─────────────────────────────────────────────────
+    // Series/movie-level like: episodeId must be null (not episode-scoped)
     let isLikedByUser = false;
+    let likedEpisodeIdSet = new Set<string>();
     if (userId) {
-      const liked = await UserLikeModel.findOne({ userId, contentId: content._id }).lean();
+      const liked = await UserLikeModel.findOne({ userId, contentId: content._id, episodeId: null }).lean();
       isLikedByUser = !!liked;
     }
 
@@ -179,6 +199,19 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     // ── 8. Logic for Series / Dramas ──────────────────────────────────────────
     else {
       const allEpisodes = await EpisodeModel.find({ contentId: content._id }).sort({ season: 1, episode: 1 }).lean();
+
+      // Fetch which episodes the user has liked (episode-level likes)
+      if (userId && allEpisodes.length > 0) {
+        const episodeIds = allEpisodes.map(ep => ep._id);
+        const episodeLikes = await UserLikeModel.find({
+          userId,
+          contentId: content._id,
+          episodeId: { $in: episodeIds },
+        }).select('episodeId').lean();
+        episodeLikes.forEach(l => {
+          if (l.episodeId) likedEpisodeIdSet.add(l.episodeId.toString());
+        });
+      }
       
       const seasonMap = new Map<number, any[]>();
       allEpisodes.forEach(ep => {
@@ -202,6 +235,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
           isLocked: !accessible,
           hlsUrl: accessible ? ep.hlsUrl || null : null,
           trailerUrl: ep.trailerUrl || null,
+          likeCount: ep.likes || 0,
+          isLikedByUser: likedEpisodeIdSet.has(ep._id.toString()),
         };
       };
 
@@ -215,7 +250,12 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
       if (currentEpisodeRaw) {
         currentEpisode = mapEpisode(currentEpisodeRaw);
         if (!currentEpisode.isLocked) {
-          currentEpisode.videoSettings = buildVideoSettings(currentEpisodeRaw.hlsUrl, (content as any).videoQualities);
+          // Use the episode's own videoQualities — NOT content.videoQualities which
+          // belongs to the parent series and would give wrong URLs per episode.
+          currentEpisode.videoSettings = buildVideoSettings(
+            currentEpisodeRaw.hlsUrl,
+            currentEpisodeRaw.videoQualities || []
+          );
         } else {
           currentEpisode.videoSettings = null;
         }

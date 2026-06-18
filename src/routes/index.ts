@@ -29,9 +29,13 @@ import episodesRoutes from './episodes';
 import likeRoutes from './like';
 import watchRoutes from './watch';
 import shareRoutes from './share';
+import wishlistRoutes from './wishlist';
 import appProfileRoutes from './appProfile';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
+import { getWebHome } from '../controllers/webHomeController';
+import { getWebBrowse } from '../controllers/webBrowseController';
+import { getWebDetail } from '../controllers/webDetailController';
 
 const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(healthRoutes);
@@ -71,6 +75,9 @@ const router: FastifyPluginAsync = async (fastify) => {
   // Smart Deep Link Share route
   fastify.register(shareRoutes);
 
+  // Wishlist route
+  fastify.register(wishlistRoutes);
+
   // App Profile / Settings route
   fastify.register(appProfileRoutes, { prefix: '/app' });
 
@@ -79,6 +86,15 @@ const router: FastifyPluginAsync = async (fastify) => {
   
   // Explore page (infinite scroll)
   fastify.get('/explore', getExplore);
+
+  // Web Homepage aggregated data
+  fastify.get('/web-home', getWebHome);
+  
+  // Web Browse paginated data
+  fastify.get('/web-browse', getWebBrowse);
+  
+  // Web Detail page data
+  fastify.get('/web-detail/:contentId', getWebDetail);
 };
 
 export default router;

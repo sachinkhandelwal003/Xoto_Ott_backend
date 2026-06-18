@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import mongoose from 'mongoose';
 import { ContentModel } from '../models/Content';
 import { MovieModel } from '../models/Movie';
+import { EpisodeModel } from '../models/Episode';
 import { UserLikeModel } from '../models/UserLike';
 import { logger } from '../lib/logger';
 
@@ -13,7 +14,7 @@ const findContent = async (contentId: string, contentType: string) => {
   return ContentModel.findById(contentId).select('likes').lean();
 };
 
-// Helper: atomically increment / decrement likes in the right collection
+// Helper: atomically increment / decrement likes on a Content or Movie
 const updateLikes = async (contentId: string, contentType: string, increment: 1 | -1) => {
   if (contentType === 'movie') {
     return MovieModel.findByIdAndUpdate(
@@ -29,8 +30,19 @@ const updateLikes = async (contentId: string, contentType: string, increment: 1 
   ).select('likes').lean();
 };
 
+// Helper: atomically increment / decrement likes on an Episode
+const updateEpisodeLikes = async (episodeId: string, increment: 1 | -1) => {
+  return EpisodeModel.findByIdAndUpdate(
+    episodeId,
+    { $inc: { likes: increment } },
+    { new: true }
+  ).select('likes').lean();
+};
+
 // POST /api/like/:contentId
-// Body: { contentType: 'drama' | 'movie' }
+// Body: { contentType: 'drama' | 'movie', episodeId?: string }
+//   - If episodeId is provided  → like is scoped to that specific episode only
+//   - If episodeId is omitted   → like is scoped to the whole series / movie
 // Header: Authorization: Bearer <token>
 export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -48,15 +60,25 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
 
     // ── 2. Parse params & body ────────────────────────────────────────────────
     const { contentId } = request.params as { contentId: string };
-    const body = request.body as { contentType?: 'drama' | 'movie' };
+    const body = request.body as { contentType?: 'drama' | 'movie'; episodeId?: string };
     const contentType = body?.contentType || 'drama';
     const contentModelType: 'Content' | 'Movie' = contentType === 'movie' ? 'Movie' : 'Content';
+    // episodeId is null when liking a whole series/movie
+    const episodeId: string | null = body?.episodeId || null;
 
     // Validate contentId
     if (!mongoose.Types.ObjectId.isValid(contentId)) {
       return reply.status(400).send({
         success: false,
         message: 'Invalid contentId.',
+      });
+    }
+
+    // Validate episodeId (if provided)
+    if (episodeId && !mongoose.Types.ObjectId.isValid(episodeId)) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Invalid episodeId.',
       });
     }
 
@@ -69,16 +91,47 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
       });
     }
 
+    // Verify episode exists and belongs to this content (if episodeId provided)
+    if (episodeId) {
+      const episode = await EpisodeModel.findById(episodeId).select('_id likes contentId').lean();
+      if (!episode) {
+        return reply.status(404).send({
+          success: false,
+          message: 'Episode not found.',
+        });
+      }
+      if (episode.contentId.toString() !== contentId) {
+        return reply.status(400).send({
+          success: false,
+          message: 'Episode does not belong to the specified content.',
+        });
+      }
+    }
+
     // ── 4. Toggle like ────────────────────────────────────────────────────────
-    const existingLike = await UserLikeModel.findOne({ userId, contentId });
+    // Key insight: episodeId = null means series/movie like.
+    // Each (userId, contentId, episodeId) triple is unique — so episode likes
+    // are fully isolated from each other and from the series-level like.
+    const likeQuery = episodeId
+      ? { userId, contentId, episodeId }
+      : { userId, contentId, episodeId: null };
+
+    const existingLike = await UserLikeModel.findOne(likeQuery);
 
     if (existingLike) {
       // Already liked → UNLIKE
       await UserLikeModel.deleteOne({ _id: existingLike._id });
-      const updated = await updateLikes(contentId, contentType, -1);
-      const likeCount = Math.max(0, (updated as any)?.likes ?? 0);
 
-      logger.info({ userId, contentId, contentType }, 'User unliked content');
+      let likeCount = 0;
+      if (episodeId) {
+        const updated = await updateEpisodeLikes(episodeId, -1);
+        likeCount = Math.max(0, (updated as any)?.likes ?? 0);
+      } else {
+        const updated = await updateLikes(contentId, contentType, -1);
+        likeCount = Math.max(0, (updated as any)?.likes ?? 0);
+      }
+
+      logger.info({ userId, contentId, episodeId, contentType }, 'User unliked content');
 
       return reply.send({
         success: true,
@@ -86,15 +139,23 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
         data: {
           likeCount,
           isLikedByUser: false,
+          episodeId: episodeId || null,
         },
       });
     } else {
       // Not liked → LIKE
-      await UserLikeModel.create({ userId, contentId, contentModelType });
-      const updated = await updateLikes(contentId, contentType, 1);
-      const likeCount = (updated as any)?.likes ?? 0;
+      await UserLikeModel.create({ userId, contentId, episodeId: episodeId || null, contentModelType });
 
-      logger.info({ userId, contentId, contentType }, 'User liked content');
+      let likeCount = 0;
+      if (episodeId) {
+        const updated = await updateEpisodeLikes(episodeId, 1);
+        likeCount = (updated as any)?.likes ?? 0;
+      } else {
+        const updated = await updateLikes(contentId, contentType, 1);
+        likeCount = (updated as any)?.likes ?? 0;
+      }
+
+      logger.info({ userId, contentId, episodeId, contentType }, 'User liked content');
 
       return reply.send({
         success: true,
@@ -102,6 +163,7 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
         data: {
           likeCount,
           isLikedByUser: true,
+          episodeId: episodeId || null,
         },
       });
     }

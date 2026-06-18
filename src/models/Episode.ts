@@ -11,9 +11,15 @@ export interface IEpisode extends Document {
   sourceStartSeconds?: number;
   sourceEndSeconds?: number;
   hlsUrl?: string;
+  videoQualities?: Array<{
+    quality: '144p' | '360p' | '480p' | '720p' | '1080p';
+    url: string;
+    size: number;
+  }>;
   trailerUrl?: string;
   duration?: number;
   views: number;
+  likes: number;
   downloadAllowed: boolean;
   subtitleLanguages: string[];
   audioLanguages: string[];
@@ -38,9 +44,17 @@ const EpisodeSchema = new Schema<IEpisode>(
     sourceStartSeconds: Number,
     sourceEndSeconds: Number,
     hlsUrl: String,
+    videoQualities: [
+      {
+        quality: { type: String, enum: ['144p', '360p', '480p', '720p', '1080p'] },
+        url: String,
+        size: Number,
+      },
+    ],
     trailerUrl: String,
     duration: Number,
     views: { type: Number, default: 0 },
+    likes: { type: Number, default: 0 },
     downloadAllowed: { type: Boolean, default: false },
     subtitleLanguages: { type: [String], default: [] },
     audioLanguages: { type: [String], default: [] },

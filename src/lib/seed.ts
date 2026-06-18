@@ -15,6 +15,7 @@ import { BannerModel } from '../models/Banner';
 import { MovieModel } from '../models/Movie';
 import { EpisodeModel } from '../models/Episode';
 import { SectionModel } from '../models/Section';
+import { GenreModel } from '../models/Genre';
 
 async function seedSubscriptionPlans() {
   const count = await SubscriptionPlanModel.countDocuments();
@@ -160,6 +161,29 @@ async function seedAdminUsers() {
   logger.info('Seeded admin users');
 }
 
+async function seedGenres() {
+  const count = await GenreModel.countDocuments();
+  if (count > 0) return;
+
+  const genres = [
+    { name: 'Action', status: 'published' as const, active: true },
+    { name: 'Drama', status: 'published' as const, active: true },
+    { name: 'Comedy', status: 'published' as const, active: true },
+    { name: 'Thriller', status: 'published' as const, active: true },
+    { name: 'Sci-Fi', status: 'published' as const, active: true },
+    { name: 'Crime', status: 'published' as const, active: true },
+    { name: 'Adventure', status: 'published' as const, active: true },
+    { name: 'Biography', status: 'published' as const, active: true },
+    { name: 'Romance', status: 'published' as const, active: true },
+    { name: 'Horror', status: 'published' as const, active: true },
+    { name: 'Fantasy', status: 'published' as const, active: true },
+    { name: 'Mystery', status: 'published' as const, active: true },
+  ];
+
+  await GenreModel.insertMany(genres);
+  logger.info('Seeded default genres');
+}
+
 async function seedSampleContent() {
   await ContentModel.deleteMany({});
 
@@ -289,8 +313,52 @@ async function seedSampleContent() {
     };
   });
 
-  await ContentModel.insertMany(content);
-  logger.info('Seeded sample short dramas');
+  // Let's create some standard TV shows (contentType: 'series')
+  const tvShowsData = dramaData.slice(0, 10).map((show, index) => {
+    return {
+      title: 'TV Show: ' + show.title,
+      type: 'series',
+      contentType: 'series',
+      description: `A captivating ${show.genre.toLowerCase()} series that will keep you hooked.`,
+      shortDescription: `${show.genre} series you won't forget`,
+      thumbnail: thumbnails[(index + 1) % thumbnails.length],
+      bannerImage: thumbnails[(index + 4) % thumbnails.length].replace('w=400&h=600', 'w=1200&h=600'),
+      genres: [show.genre],
+      languages: ['English'],
+      subtitleLanguages: ['English'],
+      audioLanguages: ['English'],
+      year: 2022 + (index % 3),
+      rating: 'TV-14',
+      ageRating: 14,
+      status: 'published',
+      hlsUrl: `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`,
+      views: show.views + 1000000,
+      likes: Math.floor(show.views * 0.08),
+      shares: Math.floor(show.views * 0.02),
+      featured: index % 2 === 0,
+      trending: true,
+      isNewContent: true,
+      isExclusive: index % 3 === 0,
+      downloadAllowed: true,
+      cast: [],
+      crew: [],
+      director: 'John Doe',
+      producer: 'Jane Doe',
+      studio: 'TV Network',
+      country: 'USA',
+      tags: [show.genre.toLowerCase(), 'series'],
+      imdbRating: 8.0 + (index % 10) / 10,
+      maturityContent: [],
+      seasons: 1 + (index % 5),
+      sections: [],
+      planRequired: 'basic',
+      createdAt: daysAgo(show.daysOld),
+      updatedAt: daysAgo(show.daysOld - 5),
+    };
+  });
+
+  await ContentModel.insertMany([...content, ...tvShowsData]);
+  logger.info('Seeded sample short dramas and TV Shows');
 }
 
 async function seedMovies() {
@@ -298,6 +366,9 @@ async function seedMovies() {
 
   const now = new Date();
   const daysAgo = (n: number) => new Date(now.getTime() - n * 86400000);
+
+  const dbGenres = await GenreModel.find({ status: 'published' }).lean();
+  const genreMap = new Map(dbGenres.map(g => [g.name.toLowerCase(), g._id]));
 
   const movieData = [
     { title: 'Neon Prophecy',        genre: 'Sci-Fi',    views: 1847293, daysOld: 90,  trending: true,  isNew: true,  featured: true,  imdb: 8.2, rating: 'TV-MA', age: 17 },
@@ -378,7 +449,7 @@ async function seedMovies() {
       thumbnail: thumbnails[index % thumbnails.length],
       bannerImage: thumbnails[(index + 3) % thumbnails.length].replace('w=400&h=600', 'w=1200&h=600'),
       posterImage: thumbnails[(index + 1) % thumbnails.length].replace('w=400&h=600', 'w=600&h=900'),
-      genres: [],
+      genres: [genreMap.get(movie.genre.toLowerCase())].filter(Boolean),
       categories: [],
       languages: [],
       subtitleLanguages: [],
@@ -953,6 +1024,7 @@ export async function seedDatabase(): Promise<void> {
       seedCategories(),
       seedLanguages(),
       seedAdminUsers(),
+      seedGenres(),
     ]);
     
     // Seed content in order

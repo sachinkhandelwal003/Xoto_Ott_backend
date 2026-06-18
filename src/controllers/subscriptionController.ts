@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { SubscriptionModel } from '../models/Subscription';
 import { SubscriptionPlanModel } from '../models/SubscriptionPlan';
+import { UserModel } from '../models/User';
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
@@ -210,6 +211,17 @@ export const createSubscription = async (request: FastifyRequest, reply: Fastify
 
     const payload = await buildSubscriptionPayload(body);
     const subscription = await SubscriptionModel.create(payload);
+
+    // Update user's subscription fields
+    await UserModel.findByIdAndUpdate(payload.userId, {
+      $set: {
+        subscriptionPlan: payload.plan,
+        subscriptionStatus: payload.status,
+        subscriptionExpiry: payload.endDate,
+        subscriptionPlanId: payload.planId
+      }
+    });
+
     const created = await SubscriptionModel.findById(subscription._id)
       .populate('userId', 'name email')
       .populate('planId', 'name')
