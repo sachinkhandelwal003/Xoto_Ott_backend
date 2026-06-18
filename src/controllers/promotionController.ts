@@ -8,10 +8,44 @@ export const listPromotions = async (request: FastifyRequest, reply: FastifyRepl
     const page = Math.max(1, parseInt(q.page || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(q.limit || '20')));
 
-    const [promotions, total] = await Promise.all([
-      PromotionModel.find().sort({ order: 1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      PromotionModel.countDocuments(),
-    ]);
+    let total = await PromotionModel.countDocuments();
+    if (total === 0) {
+      const defaultPromotion = new PromotionModel({
+        title: 'Start Trial for ₹99',
+        subtitle: '₹1',
+        videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=450&fit=crop&q=80',
+        features: [
+          {
+            icon: 'lock',
+            title: 'Start your Trial Plan',
+            description: 'Pay ₹1 and unlock all dramas',
+          },
+          {
+            icon: 'star',
+            title: 'Watch new dramas for 2 days',
+            description: 'Romance, revenge and much more',
+          },
+          {
+            icon: 'calendar',
+            title: 'Notified before autopay',
+            description: 'Pay ₹399/1 month after 2 days',
+          }
+        ],
+        buttonText: 'Start Trial',
+        secondaryButtonText: 'Cancel the plan anytime',
+        isActive: true,
+        order: 0,
+      });
+      await defaultPromotion.save();
+      total = 1;
+    }
+
+    const promotions = await PromotionModel.find()
+      .sort({ order: 1, createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
 
     return {
       success: true,
@@ -72,7 +106,42 @@ export const getPromotion = async (request: FastifyRequest, reply: FastifyReply)
 
 export const getActivePromotion = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const promotion = await PromotionModel.findOne({ isActive: true }).sort({ order: 1, createdAt: -1 }).lean();
+    let promotion = await PromotionModel.findOne({ isActive: true }).sort({ order: 1, createdAt: -1 }).lean();
+
+    if (!promotion) {
+      const count = await PromotionModel.countDocuments();
+      if (count === 0) {
+        const defaultPromotion = new PromotionModel({
+          title: 'Start Trial for ₹99',
+          subtitle: '₹1',
+          videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+          thumbnailUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=450&fit=crop&q=80',
+          features: [
+            {
+              icon: 'lock',
+              title: 'Start your Trial Plan',
+              description: 'Pay ₹1 and unlock all dramas',
+            },
+            {
+              icon: 'star',
+              title: 'Watch new dramas for 2 days',
+              description: 'Romance, revenge and much more',
+            },
+            {
+              icon: 'calendar',
+              title: 'Notified before autopay',
+              description: 'Pay ₹399/1 month after 2 days',
+            }
+          ],
+          buttonText: 'Start Trial',
+          secondaryButtonText: 'Cancel the plan anytime',
+          isActive: true,
+          order: 0,
+        });
+        await defaultPromotion.save();
+        promotion = defaultPromotion.toObject();
+      }
+    }
 
     if (!promotion) {
       return reply.status(404).send({ success: false, message: 'No active promotion found' });
