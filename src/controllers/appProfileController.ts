@@ -54,7 +54,9 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         const prefix = appName.substring(0, 4).toUpperCase();
         const displayId = `${prefix}${String(userNumber).padStart(4, '0')}`;
 
-        const isActive = user.subscriptionStatus === 'active' && (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
+        const isActive = user.subscriptionStatus === 'active' && 
+                         user.subscriptionPlan !== 'free' && 
+                         (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
         userProfile = {
           id: user._id.toString(),
           displayId,
