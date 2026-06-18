@@ -112,7 +112,7 @@ const MovieSchema = new Schema<IMovie>(
     trending: { type: Boolean, default: false },
     isNewContent: { type: Boolean, default: true },
     isExclusive: { type: Boolean, default: false },
-    downloadAllowed: { type: Boolean, default: false },
+    downloadAllowed: { type: Boolean, default: true },
     cast: [{ actor: { type: Schema.Types.ObjectId, ref: 'Actor' }, character: String, role: String }],
     crew: [{ director: { type: Schema.Types.ObjectId, ref: 'Director' }, role: String }],
     producer: String,

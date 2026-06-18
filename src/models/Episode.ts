@@ -55,7 +55,7 @@ const EpisodeSchema = new Schema<IEpisode>(
     duration: Number,
     views: { type: Number, default: 0 },
     likes: { type: Number, default: 0 },
-    downloadAllowed: { type: Boolean, default: false },
+    downloadAllowed: { type: Boolean, default: true },
     subtitleLanguages: { type: [String], default: [] },
     audioLanguages: { type: [String], default: [] },
     airDate: Date,
