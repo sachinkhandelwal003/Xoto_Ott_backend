@@ -42,7 +42,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
 
     const server = request.server as any;
     const accessToken = server.jwt.sign(payload, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     });
 
     const refreshToken = server.jwt.sign(
@@ -57,7 +57,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.status(200).send({
       accessToken,
       refreshToken,
-      expiresIn: 900,
+      expiresIn: 86400,
     });
   } catch (error) {
     console.error(error);

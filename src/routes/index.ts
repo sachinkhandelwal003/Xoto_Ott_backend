@@ -40,8 +40,10 @@ import { getWebHome } from '../controllers/webHomeController';
 import { getWebBrowse } from '../controllers/webBrowseController';
 import { getWebDetail } from '../controllers/webDetailController';
 import { getMovieDetail } from '../controllers/appMovieController';
+import adRoutes from './ad';
 
 const router: FastifyPluginAsync = async (fastify) => {
+  fastify.register(adRoutes);
   fastify.register(healthRoutes);
   fastify.register(authRoutes);
   fastify.register(appAuthRoutes);

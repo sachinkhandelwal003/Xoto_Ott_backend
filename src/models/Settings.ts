@@ -101,6 +101,17 @@ export interface ISettings extends Document {
   seoImage: string;
   googleVerification: string;
   canonicalUrl: string;
+  // Ad Networks
+  adNetworkEnabled: boolean;
+  adMobPublisherId: string;
+  adMobAppIdAndroid: string;
+  adMobAppIdIos: string;
+  adMobBannerAndroid: string;
+  adMobBannerIos: string;
+  adMobInterstitialAndroid: string;
+  adMobInterstitialIos: string;
+  vastPrerollUrl: string;
+  vastMidrollUrl: string;
 }
 
 const SettingsSchema = new Schema<ISettings>(
@@ -205,6 +216,17 @@ const SettingsSchema = new Schema<ISettings>(
     seoImage: { type: String, default: '' },
     googleVerification: { type: String, default: '' },
     canonicalUrl: { type: String, default: '' },
+    // Ad Networks
+    adNetworkEnabled: { type: Boolean, default: false },
+    adMobPublisherId: { type: String, default: '' },
+    adMobAppIdAndroid: { type: String, default: '' },
+    adMobAppIdIos: { type: String, default: '' },
+    adMobBannerAndroid: { type: String, default: '' },
+    adMobBannerIos: { type: String, default: '' },
+    adMobInterstitialAndroid: { type: String, default: '' },
+    adMobInterstitialIos: { type: String, default: '' },
+    vastPrerollUrl: { type: String, default: '' },
+    vastMidrollUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );

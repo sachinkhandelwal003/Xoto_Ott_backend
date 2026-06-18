@@ -97,7 +97,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
             const m = movieMap.get(item.contentId.toString());
             if (!m) return null;
             return {
-              id: item._id.toString(),
+              id: item.contentId.toString(),
+              downloadId: item._id.toString(),
               contentId: item.contentId.toString(),
               title: m.title,
               thumbnail: m.thumbnail,
@@ -112,7 +113,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
             const e = item.episodeId ? episodeMap.get(item.episodeId.toString()) : null;
             if (!d || !e) return null;
             return {
-              id: item._id.toString(),
+              id: item.contentId.toString(),
+              downloadId: item._id.toString(),
               contentId: item.contentId.toString(),
               episodeId: item.episodeId?.toString(),
               title: e.title,
@@ -178,8 +180,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       };
     }
 
-    // If empty (for guest or new users), fill with actual database content
-    if (downloadsList.length === 0 || wishlistList.length === 0) {
+    // If guest user, fill with actual database content to demonstrate UI
+    if (!userId && (downloadsList.length === 0 || wishlistList.length === 0)) {
       const [movies, dramas] = await Promise.all([
         MovieModel.find({ status: 'published' }).limit(2).lean(),
         ContentModel.find({ status: 'published', type: 'series', contentType: 'drama' }).limit(2).lean()

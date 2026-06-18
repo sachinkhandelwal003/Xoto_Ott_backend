@@ -1,20 +1,69 @@
-
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { UserModel } from '../models/User';
 import { SubscriptionModel } from '../models/Subscription';
 import { ContentModel } from '../models/Content';
+import { MovieModel } from '../models/Movie';
 import { GenreModel } from '../models/Genre';
+import { UserWatchProgressModel } from '../models/UserWatchProgress';
+import { ReviewModel } from '../models/Review';
+import mongoose from 'mongoose';
 
-export const getDashboardStats = async (_request: FastifyRequest, reply: FastifyReply) => {
+// Helper to determine date range
+const getDateFilter = (query: any) => {
+  const { period, startDate, endDate } = query;
+  
+  if (startDate && endDate) {
+    return {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
+    };
+  }
+
+  const now = new Date();
+  const start = new Date();
+  
+  if (period === 'week') {
+    start.setDate(now.getDate() - 7);
+  } else if (period === 'month') {
+    start.setMonth(now.getMonth() - 1);
+  } else {
+    // Default to year
+    start.setFullYear(now.getFullYear() - 1);
+  }
+
+  return {
+    $gte: start,
+    $lte: now,
+  };
+};
+
+const getGroupingFormat = (dateFilter: any) => {
+  const start = dateFilter.$gte.getTime();
+  const end = dateFilter.$lte.getTime();
+  const days = (end - start) / (1000 * 60 * 60 * 24);
+  
+  if (days <= 31) {
+    return { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+  } else {
+    return { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
+  }
+};
+
+export const getDashboardStats = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
+    const query = request.query as any;
+    const dateFilter = getDateFilter(query);
+
     const [
       totalUsers,
       activeSubscriptions,
       totalContent,
+      totalMovies,
     ] = await Promise.all([
       UserModel.countDocuments(),
       SubscriptionModel.countDocuments({ status: 'active' }),
       ContentModel.countDocuments(),
+      MovieModel.countDocuments()
     ]);
 
     const soonToExpire = await SubscriptionModel.countDocuments({
@@ -30,6 +79,7 @@ export const getDashboardStats = async (_request: FastifyRequest, reply: Fastify
     ]);
 
     const totalRevenue = totalSubscriptionRevenue[0]?.total || 0;
+    const totalReviews = await ReviewModel.countDocuments();
 
     return reply.send({
       success: true,
@@ -37,12 +87,12 @@ export const getDashboardStats = async (_request: FastifyRequest, reply: Fastify
         totalUsers,
         totalSubscribers: activeSubscriptions,
         soonToExpire,
-        totalReviews: 71,
-        totalStorageUsage: '292.55 MB',
-        restContent: totalContent,
+        totalReviews,
+        totalStorageUsage: 'Dynamic MB', // Placeholder for actual S3 calculation if needed
+        restContent: totalContent + totalMovies,
         subscriptionRevenue: `₹${totalRevenue.toFixed(2)}`,
-        rentRevenue: '₹56.95',
-        totalRevenue: `₹${(totalRevenue + 56.95).toFixed(2)}`,
+        rentRevenue: '₹0.00', // Update if implementing rentals
+        totalRevenue: `₹${totalRevenue.toFixed(2)}`,
       },
     });
   } catch (error: any) {
@@ -52,23 +102,22 @@ export const getDashboardStats = async (_request: FastifyRequest, reply: Fastify
 
 export const getRevenueData = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const query = request.query as { period?: string };
-    const period = query.period || 'year';
+    const query = request.query as any;
+    const dateFilter = getDateFilter(query);
+    const groupFormat = getGroupingFormat(dateFilter);
 
-    const revenueData = [
-      { name: 'Jan', value: 15000 },
-      { name: 'Feb', value: 12000 },
-      { name: 'Mar', value: 18000 },
-      { name: 'Apr', value: 25000 },
-      { name: 'May', value: 22000 },
-      { name: 'Jun', value: 28000 },
-      { name: 'Jul', value: 26000 },
-    ];
+    const revenueByPeriod = await SubscriptionModel.aggregate([
+      { $match: { createdAt: dateFilter, status: 'active' } },
+      { $group: { _id: groupFormat, total: { $sum: '$totalAmount' } } },
+      { $sort: { _id: 1 } }
+    ]);
 
-    return reply.send({
-      success: true,
-      data: revenueData,
-    });
+    const revenueData = revenueByPeriod.map(r => ({
+      name: r._id,
+      value: r.total,
+    }));
+
+    return reply.send({ success: true, data: revenueData });
   } catch (error: any) {
     return reply.status(500).send({ success: false, error: error.message });
   }
@@ -76,21 +125,34 @@ export const getRevenueData = async (request: FastifyRequest, reply: FastifyRepl
 
 export const getNewSubscribersData = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const query = request.query as { period?: string };
-    const period = query.period || 'year';
+    const query = request.query as any;
+    const dateFilter = getDateFilter(query);
+    const groupFormat = getGroupingFormat(dateFilter);
 
-    const newSubscribersData = [
-      { name: 'Jan', basic: 120, premium: 80 },
-      { name: 'Feb', basic: 132, premium: 95 },
-      { name: 'Mar', basic: 101, premium: 88 },
-      { name: 'Apr', basic: 134, premium: 110 },
-      { name: 'May', basic: 90, premium: 78 },
-      { name: 'Jun', basic: 230, premium: 150 },
-    ];
+    const subscribersByPeriod = await SubscriptionModel.aggregate([
+      { $match: { createdAt: dateFilter } },
+      { 
+        $group: { 
+          _id: { date: groupFormat, plan: '$plan' }, 
+          count: { $sum: 1 } 
+        } 
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    // Format the grouped data into the expected format
+    const formattedData: Record<string, any> = {};
+    for (const sub of subscribersByPeriod) {
+      const date = sub._id.date;
+      const plan = String(sub._id.plan).toLowerCase().includes('premium') ? 'premium' : 'basic';
+      
+      if (!formattedData[date]) formattedData[date] = { name: date, basic: 0, premium: 0 };
+      formattedData[date][plan] += sub.count;
+    }
 
     return reply.send({
       success: true,
-      data: newSubscribersData,
+      data: Object.values(formattedData),
     });
   } catch (error: any) {
     return reply.status(500).send({ success: false, error: error.message });
@@ -99,22 +161,45 @@ export const getNewSubscribersData = async (request: FastifyRequest, reply: Fast
 
 export const getMostWatchedData = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const query = request.query as { period?: string };
-    const period = query.period || 'year';
+    const query = request.query as any;
+    const dateFilter = getDateFilter(query);
+    // UserWatchProgress uses updated at to track recent views
+    const dateFilterForWatch = {
+      $gte: dateFilter.$gte,
+      $lte: dateFilter.$lte
+    };
 
-    const mostWatchedData = [
-      { name: 'Jan', movies: 15, tvShows: 12 },
-      { name: 'Feb', movies: 18, tvShows: 15 },
-      { name: 'Mar', movies: 22, tvShows: 18 },
-      { name: 'Apr', movies: 20, tvShows: 20 },
-      { name: 'May', movies: 25, tvShows: 22 },
-      { name: 'Jun', movies: 30, tvShows: 28 },
-      { name: 'Jul', movies: 28, tvShows: 25 },
-    ];
+    // Calculate dynamic format based on updatedAt
+    const start = dateFilter.$gte.getTime();
+    const end = dateFilter.$lte.getTime();
+    const days = (end - start) / (1000 * 60 * 60 * 24);
+    const groupFormat = days <= 31 
+      ? { $dateToString: { format: '%Y-%m-%d', date: '$updatedAt' } } 
+      : { $dateToString: { format: '%Y-%m', date: '$updatedAt' } };
+
+    const watchData = await UserWatchProgressModel.aggregate([
+      { $match: { updatedAt: dateFilterForWatch } },
+      { 
+        $group: { 
+          _id: { date: groupFormat, type: '$contentModelType' }, 
+          count: { $sum: 1 } 
+        } 
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    const formattedData: Record<string, any> = {};
+    for (const wd of watchData) {
+      const date = wd._id.date;
+      const type = wd._id.type === 'Movie' ? 'movies' : 'tvShows';
+      
+      if (!formattedData[date]) formattedData[date] = { name: date, movies: 0, tvShows: 0 };
+      formattedData[date][type] += wd.count;
+    }
 
     return reply.send({
       success: true,
-      data: mostWatchedData,
+      data: Object.values(formattedData),
     });
   } catch (error: any) {
     return reply.status(500).send({ success: false, error: error.message });
@@ -123,13 +208,34 @@ export const getMostWatchedData = async (request: FastifyRequest, reply: Fastify
 
 export const getTopGenresData = async (_request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const topGenresData = [
-      { name: 'Horror', value: 25 },
-      { name: 'Historical', value: 20 },
-      { name: 'Inspirational', value: 18 },
-      { name: 'Romantic', value: 22 },
-      { name: 'Comedy', value: 15 },
-    ];
+    const genres = await GenreModel.find().lean();
+    
+    // In a perfectly optimized DB, we would aggregate MovieModel views by genre array.
+    // For simplicity, we'll aggregate Movies and sum their views by genre.
+    const movies = await MovieModel.find({ status: 'published' }).select('genres views').lean();
+    const contents = await ContentModel.find({ status: 'published' }).select('genres views').lean();
+    
+    const genreViews: Record<string, number> = {};
+    
+    for (const m of [...movies, ...contents]) {
+      for (const gId of m.genres || []) {
+        const idStr = gId.toString();
+        genreViews[idStr] = (genreViews[idStr] || 0) + (m.views || 0);
+      }
+    }
+
+    const topGenresData = genres.map(g => ({
+      name: g.name,
+      value: genreViews[g._id.toString()] || 0
+    })).sort((a, b) => b.value - a.value).slice(0, 5);
+
+    // If all views are zero, return mock data layout so chart doesn't crash
+    if (topGenresData.every(g => g.value === 0)) {
+       return reply.send({
+         success: true,
+         data: genres.slice(0,5).map(g => ({ name: g.name, value: 1 }))
+       });
+    }
 
     return reply.send({
       success: true,
@@ -142,50 +248,20 @@ export const getTopGenresData = async (_request: FastifyRequest, reply: FastifyR
 
 export const getReviews = async (_request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const reviewsData = [
-      {
-        name: 'Dorothy Erickson',
-        date: '3rd June 2026',
-        category: 'TV Shows',
-        rating: 5,
-        avatar: 'D',
-      },
-      {
-        name: 'Lila Lucas',
-        date: '1st June 2026',
-        category: 'TV Shows',
-        rating: 4,
-        avatar: 'L',
-      },
-      {
-        name: 'Tracy Jones',
-        date: '31st May 2026',
-        category: 'TV Shows',
-        rating: 5,
-        avatar: 'T',
-      },
-      {
-        name: 'Dorothy Erickson',
-        date: '30th May 2026',
-        category: 'TV Shows',
-        rating: 5,
-        avatar: 'D',
-      },
-      {
-        name: 'Tracy Jones',
-        date: '29th May 2026',
-        category: 'TV Shows',
-        rating: 4,
-        avatar: 'T',
-      },
-      {
-        name: 'Jay Henry',
-        date: '28th May 2026',
-        category: 'TV Shows',
-        rating: 5,
-        avatar: 'J',
-      },
-    ];
+    const reviews = await ReviewModel.find({ status: 'published' })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .populate('userId', 'name avatar')
+      .lean();
+
+    const reviewsData = reviews.map((r: any) => ({
+      name: r.userId?.name || 'Anonymous User',
+      date: new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      category: r.contentModelType === 'Movie' ? 'Movies' : 'TV Shows',
+      rating: r.rating,
+      avatar: r.userId?.name ? r.userId.name.charAt(0).toUpperCase() : 'U',
+      comment: r.comment
+    }));
 
     return reply.send({
       success: true,
@@ -198,62 +274,21 @@ export const getReviews = async (_request: FastifyRequest, reply: FastifyReply) 
 
 export const getTransactions = async (_request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const transactionsData = [
-      {
-        name: 'Tristan Erikson',
-        date: '2026-05-15',
-        plan: 'Basic',
-        amount: '₹500.00',
-        duration: '1 month',
-        method: 'Stripe',
-        avatar: 'T',
-      },
-      {
-        name: 'John Doe',
-        date: '2026-05-11',
-        plan: 'Premium Plan',
-        amount: '₹2000.00',
-        duration: '3 months',
-        method: 'Stripe',
-        avatar: 'J',
-      },
-      {
-        name: 'Lila Lucas',
-        date: '2026-05-10',
-        plan: 'Premium Plan',
-        amount: '₹1000.00',
-        duration: '1 month',
-        method: '-',
-        avatar: 'L',
-      },
-      {
-        name: 'Dorothy Erickson',
-        date: '-',
-        plan: 'Basic',
-        amount: '₹500.00',
-        duration: '1 month',
-        method: '-',
-        avatar: 'D',
-      },
-      {
-        name: 'Sinika Green',
-        date: '2026-05-06',
-        plan: 'Premium Plan',
-        amount: '₹1000.00',
-        duration: '1 month',
-        method: 'Stripe',
-        avatar: 'S',
-      },
-      {
-        name: 'Fefe Harris',
-        date: '2026-05-08',
-        plan: 'Premium Plan',
-        amount: '₹1000.00',
-        duration: '1 month',
-        method: '-',
-        avatar: 'F',
-      },
-    ];
+    const transactions = await SubscriptionModel.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('userId', 'name')
+      .lean();
+
+    const transactionsData = transactions.map((t: any) => ({
+      name: t.userId?.name || 'Deleted User',
+      date: new Date(t.createdAt).toISOString().split('T')[0],
+      plan: t.plan,
+      amount: `₹${t.totalAmount.toFixed(2)}`,
+      duration: t.duration,
+      method: t.paymentMethod || '-',
+      avatar: t.userId?.name ? t.userId.name.charAt(0).toUpperCase() : 'D',
+    }));
 
     return reply.send({
       success: true,
