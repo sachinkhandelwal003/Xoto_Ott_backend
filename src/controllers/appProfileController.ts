@@ -11,11 +11,20 @@ import { EpisodeModel } from '../models/Episode';
 import { logger } from '../lib/logger';
 
 // Optional user lookup helper
-const getOptionalUserId = (request: FastifyRequest): string | null => {
+const getOptionalUserToken = (request: FastifyRequest): string | null => {
   try {
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-    const token = authHeader.slice(7);
+    return authHeader.slice(7);
+  } catch {
+    return null;
+  }
+};
+
+const getOptionalUserId = (request: FastifyRequest): string | null => {
+  try {
+    const token = getOptionalUserToken(request);
+    if (!token) return null;
     const server = request.server as any;
     const decoded = server.jwt.verify(token) as any;
     return decoded?.id || null;
@@ -47,6 +56,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
           subscriptionStatus: isActive ? 'active' : 'inactive',
           subscriptionPlan: isActive ? (user.subscriptionPlan || 'free') : 'free',
           videoQuality: user.videoQuality || 'auto',
+          preferredLanguage: user.preferredLanguage || 'Hindi',
+          accessToken: getOptionalUserToken(request) || null,
         };
       }
 
@@ -136,7 +147,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
             thumbnail: c.thumbnail,
             bannerImage: c.bannerImage || null,
             posterImage: c.posterImage || c.thumbnail || '',
-            type: isMovie ? 'movie' : (c.contentType || 'drama'),
+            type: isMovie ? 'movie' : (c.contentType === 'drama' ? 'drama' : 'series'),
             views: c.views || 0,
             year: c.year || null,
             rating: c.rating || null,
@@ -153,6 +164,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         subscriptionStatus: 'inactive',
         subscriptionPlan: 'free',
         videoQuality: 'auto',
+        preferredLanguage: 'Hindi',
+        accessToken: null,
       };
     }
 
@@ -222,7 +235,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
             thumbnail: d.thumbnail,
             bannerImage: d.bannerImage || null,
             posterImage: d.thumbnail || '',
-            type: d.contentType || 'drama',
+            type: d.contentType === 'drama' ? 'drama' : 'series',
             views: d.views || 0,
             year: d.year || null,
             rating: d.rating || null,
@@ -282,6 +295,10 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       appVersion: 'V1.2.4',
     };
 
+    // Fetch all active languages for the profile page
+    const languages = await LanguageModel.find({ isActive: true }).sort({ order: 1 }).select('id name code').lean();
+
+    // 6. Send response
     return reply.send({
       success: true,
       data: {
@@ -291,7 +308,12 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         appSettings,
         downloads: downloadsList,
         wishlist: wishlistList,
-      },
+        languages: languages.map(lang => ({
+          id: lang._id.toString(),
+          name: lang.name,
+          code: lang.code
+        })),
+      }
     });
   } catch (error: any) {
     logger.error({ error }, 'Error getting app profile');
