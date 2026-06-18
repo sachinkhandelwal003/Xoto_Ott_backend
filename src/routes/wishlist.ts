@@ -12,6 +12,7 @@ const wishlistRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/wishlist/:contentId', toggleWishlist);
+  fastify.post('/wishlist', toggleWishlist);
   fastify.get('/wishlist', getWishlist);
 };
 

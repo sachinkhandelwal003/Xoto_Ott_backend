@@ -7,9 +7,23 @@ import { logger } from '../lib/logger';
 
 export const toggleWishlist = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const { contentId } = request.params as { contentId: string };
-    const { contentType } = request.body as { contentType: 'drama' | 'series' | 'movie' };
-    
+    const params = (request.params || {}) as { contentId?: string };
+    const body = (request.body || {}) as { contentId?: string; contentType?: string; type?: string };
+
+    const contentId = body.contentId || params.contentId;
+    const rawType = body.contentType || body.type;
+
+    if (!contentId) {
+      return reply.status(400).send({ success: false, message: 'contentId is required' });
+    }
+
+    if (!rawType) {
+      return reply.status(400).send({ success: false, message: 'type or contentType is required' });
+    }
+
+    const isMovie = rawType === 'movie';
+    const contentModelType = isMovie ? 'Movie' : 'Content';
+
     // Fallback or explicit auth extraction
     const user = (request as any).user;
     if (!user || !user.id) {
@@ -18,13 +32,11 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
     const userId = user.id;
 
     // Verify content exists
-    const Model = (contentType === 'movie' ? MovieModel : ContentModel) as any;
+    const Model = isMovie ? MovieModel : ContentModel as any;
     const content = await Model.findById(contentId).select('_id');
     if (!content) {
       return reply.status(404).send({ success: false, message: 'Content not found' });
     }
-
-    const contentModelType = contentType === 'movie' ? 'Movie' : 'Content';
 
     const existingWishlist = await UserWishlistModel.findOne({ userId, contentId });
 
@@ -37,10 +49,14 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
         success: true,
         message: 'Removed from wishlist',
         isWishlisted: false,
+        data: {
+          id: existingWishlist._id.toString(),
+          type: rawType
+        }
       });
     } else {
       // Add to wishlist
-      await UserWishlistModel.create({
+      const newWishlist = await UserWishlistModel.create({
         userId,
         contentId,
         contentModelType,
@@ -51,6 +67,10 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
         success: true,
         message: 'Added to wishlist',
         isWishlisted: true,
+        data: {
+          id: newWishlist._id.toString(),
+          type: rawType
+        }
       });
     }
   } catch (error: any) {
