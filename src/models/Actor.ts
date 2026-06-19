@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IActor extends Document {
@@ -42,4 +43,5 @@ const ActorSchema = new Schema<IActor>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+ActorSchema.plugin(adminAuditPlugin);
 export const ActorModel = mongoose.model<IActor>('Actor', ActorSchema);

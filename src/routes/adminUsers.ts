@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/rbac';
 import {
   getAllAdminUsers,
   getAdminUserById,
@@ -12,14 +12,14 @@ import {
 } from '../controllers/adminUserController';
 
 const adminUsersRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/', { onRequest: [authenticate] }, getAllAdminUsers);
-  fastify.get('/:id', { onRequest: [authenticate] }, getAdminUserById);
-  fastify.post('/', { onRequest: [authenticate] }, createAdminUser);
-  fastify.put('/:id', { onRequest: [authenticate] }, updateAdminUser);
-  fastify.delete('/:id', { onRequest: [authenticate] }, deleteAdminUser);
-  fastify.post('/:id/reset-password', { onRequest: [authenticate] }, resetUserPassword);
-  fastify.patch('/:id/toggle-status', { onRequest: [authenticate] }, toggleUserStatus);
-  fastify.put('/profile', { onRequest: [authenticate] }, updateOwnProfile);
+  fastify.get('/', { onRequest: [requirePermission('influencers', 'canView')] }, getAllAdminUsers);
+  fastify.get('/:id', { onRequest: [requirePermission('influencers', 'canView')] }, getAdminUserById);
+  fastify.post('/', { onRequest: [requirePermission('influencers', 'canCreate')] }, createAdminUser);
+  fastify.put('/:id', { onRequest: [requirePermission('influencers', 'canEdit')] }, updateAdminUser);
+  fastify.delete('/:id', { onRequest: [requirePermission('influencers', 'canDelete')] }, deleteAdminUser);
+  fastify.post('/:id/reset-password', { onRequest: [requirePermission('influencers', 'canCreate')] }, resetUserPassword);
+  fastify.patch('/:id/toggle-status', { onRequest: [requirePermission('influencers', 'canEdit')] }, toggleUserStatus);
+  fastify.put('/profile', { onRequest: [requirePermission('influencers')] }, updateOwnProfile);
 };
 
 export default adminUsersRoutes;

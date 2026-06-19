@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IUserProfile {
@@ -96,4 +97,5 @@ const UserSchema = new Schema<IUser>(
 UserSchema.index({ subscriptionPlan: 1, subscriptionStatus: 1 });
 UserSchema.index({ status: 1 });
 
+UserSchema.plugin(adminAuditPlugin);
 export const UserModel = mongoose.model<IUser>('User', UserSchema);

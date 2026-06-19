@@ -227,7 +227,7 @@ export const registerUser = async (request: FastifyRequest, reply: FastifyReply)
     }).catch((err) => console.error('[email] Registration email failed:', err));
     const server = request.server as any;
     const accessToken = server.jwt.sign({ id: user._id.toString(), name: user.name, role: 'user' }, { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' });
-    return reply.status(200).send({ success: true, accessToken, userId: user._id.toString(), expiresIn: 604800 });
+    return reply.status(200).send({ success: true, accessToken, userId: user._id.toString(), name: user.name, subscriptionPlan: user.subscriptionPlan || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', expiresIn: 604800 });
   } catch (error) {
     console.error('Register Error:', error);
     return reply.status(500).send({ success: false, message: 'Internal server error' });
@@ -250,7 +250,7 @@ export const loginUser = async (request: FastifyRequest, reply: FastifyReply) =>
     await user.save();
     const server = request.server as any;
     const accessToken = server.jwt.sign({ id: user._id.toString(), name: user.name, role: 'user' }, { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' });
-    return reply.status(200).send({ success: true, accessToken, userId: user._id.toString(), expiresIn: 604800 });
+    return reply.status(200).send({ success: true, accessToken, userId: user._id.toString(), name: user.name, subscriptionPlan: user.subscriptionPlan || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', expiresIn: 604800 });
   } catch (error) {
     console.error('Login Error:', error);
     return reply.status(500).send({ success: false, message: 'Internal server error' });

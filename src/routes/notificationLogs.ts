@@ -1,3 +1,4 @@
+import { requirePermission } from '../middlewares/rbac';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   listNotificationLogs,
@@ -9,19 +10,19 @@ import {
 
 const notificationLogsRoutes: FastifyPluginAsync = async (fastify, opts) => {
   // List all notification logs with pagination and type filter
-  fastify.get('/', listNotificationLogs);
+  fastify.get('/', { onRequest: [requirePermission('notifications', 'canView')] }, listNotificationLogs);
 
   // Get notification log by ID
-  fastify.get('/item/:notificationId', getNotificationLogById);
+  fastify.get('/item/:notificationId', { onRequest: [requirePermission('notifications', 'canView')] }, getNotificationLogById);
 
   // Create new notification log
-  fastify.post('/', createNotificationLog);
+  fastify.post('/', { onRequest: [requirePermission('notifications', 'canCreate')] }, createNotificationLog);
 
   // Delete notification log
-  fastify.delete('/item/:notificationId', deleteNotificationLog);
+  fastify.delete('/item/:notificationId', { onRequest: [requirePermission('notifications', 'canDelete')] }, deleteNotificationLog);
 
   // Bulk delete notification logs
-  fastify.post('/bulk-delete', bulkDeleteNotificationLogs);
+  fastify.post('/bulk-delete', { onRequest: [requirePermission('notifications', 'canCreate')] }, bulkDeleteNotificationLogs);
 };
 
 export default notificationLogsRoutes;

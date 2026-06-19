@@ -160,13 +160,133 @@ export const sendTemplateEmail = async (
 
 // ---- Named convenience wrappers (backward-compatible) ----
 
-export const sendWelcomeEmail = async (email: string, name: string, username: string, password: string) =>
-  sendTemplateEmail('Admin Credentials', email, {
-    user_name: name,
-    user_id: username,
-    user_password: password,
-    site_url: process.env.ADMIN_PANEL_URL || 'http://localhost:5173',
-  });
+export const sendWelcomeEmail = async (email: string, name: string, username: string, password: string): Promise<boolean> => {
+  const result = await createTransporter();
+  if (!result) {
+    console.log(`[email] Skipped welcome email (no credentials). to=${email}`);
+    return false;
+  }
+  const { transporter, from } = result;
+
+  try {
+    const platformName = await getPlatformName();
+    const template = await NotificationTemplateModel.findOne({ type: 'Admin Credentials' }).lean();
+
+    let subject: string;
+    let html: string;
+
+    const variables = {
+      user_name: name,
+      user_id: username,
+      user_password: password,
+      site_url: process.env.ADMIN_PANEL_URL || 'http://localhost:5173',
+    };
+
+    if (template && (template as any).status && (template as any).emailTemplate) {
+      subject = replaceVariables((template as any).emailSubject || 'Your Admin Panel Credentials', variables);
+      const bodyContent = replaceVariables((template as any).emailTemplate, variables);
+      html = wrapEmail(bodyContent, platformName);
+    } else {
+      // Beautiful default welcome email with clear credentials
+      subject = `Your ${platformName} Admin Panel Login Credentials`;
+      html = wrapEmail(`
+        <p>Hi <strong>${name}</strong>,</p>
+        <p>Welcome to <strong>${platformName}</strong>! Your admin panel account has been created successfully.</p>
+        <p style="margin-top:20px;">Here are your login credentials:</p>
+        <table style="border-collapse:collapse;width:100%;max-width:400px;margin-top:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 18px;color:#6b7280;font-size:13px;width:120px;background:#fff;border-bottom:1px solid #e5e7eb;">Login ID</td>
+            <td style="padding:14px 18px;color:#111827;font-weight:700;font-size:14px;background:#fff;border-bottom:1px solid #e5e7eb;">${username}</td>
+          </tr>
+          <tr>
+            <td style="padding:14px 18px;color:#6b7280;font-size:13px;width:120px;background:#fff;">Password</td>
+            <td style="padding:14px 18px;color:#dc2626;font-weight:700;font-size:14px;background:#fff;font-family:monospace;">${password}</td>
+          </tr>
+        </table>
+        <p style="margin-top:20px;">
+          <a href="${process.env.ADMIN_PANEL_URL || 'http://localhost:5173'}/admin/login" 
+             style="display:inline-block;background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:14px;">
+            Log In to Admin Panel
+          </a>
+        </p>
+        <p style="margin-top:24px;color:#6b7280;font-size:13px;">
+          <strong style="color:#dc2626;">Important:</strong> For security reasons, please change your password after your first login. Do not share these credentials with anyone.
+        </p>
+      `, platformName);
+    }
+
+    await transporter.sendMail({ from, to: email, subject, html });
+    console.log(`[email] Sent welcome credentials to=${email}`);
+    return true;
+  } catch (error) {
+    console.error(`[email] Failed welcome email to=${email}:`, error);
+    return false;
+  }
+};
+
+export const sendAdminPasswordResetEmail = async (email: string, name: string, username: string, password: string): Promise<boolean> => {
+  const result = await createTransporter();
+  if (!result) {
+    console.log(`[email] Skipped password reset email (no credentials). to=${email}`);
+    return false;
+  }
+  const { transporter, from } = result;
+
+  try {
+    const platformName = await getPlatformName();
+    const template = await NotificationTemplateModel.findOne({ type: 'Admin Password Reset' }).lean();
+
+    let subject: string;
+    let html: string;
+
+    const variables = {
+      user_name: name,
+      user_id: username,
+      user_password: password,
+      site_url: process.env.ADMIN_PANEL_URL || 'http://localhost:5173',
+    };
+
+    if (template && (template as any).status && (template as any).emailTemplate) {
+      subject = replaceVariables((template as any).emailSubject || 'Your Admin Password Has Been Reset', variables);
+      const bodyContent = replaceVariables((template as any).emailTemplate, variables);
+      html = wrapEmail(bodyContent, platformName);
+    } else {
+      // Beautiful default password reset email with clear credentials
+      subject = `Your ${platformName} Admin Password Has Been Reset`;
+      html = wrapEmail(`
+        <p>Hi <strong>${name}</strong>,</p>
+        <p>Your <strong>${platformName}</strong> admin panel password has been reset by an administrator.</p>
+        <p style="margin-top:20px;">Here are your updated login credentials:</p>
+        <table style="border-collapse:collapse;width:100%;max-width:400px;margin-top:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 18px;color:#6b7280;font-size:13px;width:120px;background:#fff;border-bottom:1px solid #e5e7eb;">Login ID</td>
+            <td style="padding:14px 18px;color:#111827;font-weight:700;font-size:14px;background:#fff;border-bottom:1px solid #e5e7eb;">${username}</td>
+          </tr>
+          <tr>
+            <td style="padding:14px 18px;color:#6b7280;font-size:13px;width:120px;background:#fff;">New Password</td>
+            <td style="padding:14px 18px;color:#dc2626;font-weight:700;font-size:14px;background:#fff;font-family:monospace;">${password}</td>
+          </tr>
+        </table>
+        <p style="margin-top:20px;">
+          <a href="${process.env.ADMIN_PANEL_URL || 'http://localhost:5173'}/admin/login" 
+             style="display:inline-block;background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:14px;">
+            Log In to Admin Panel
+          </a>
+        </p>
+        <p style="margin-top:24px;color:#6b7280;font-size:13px;">
+          <strong style="color:#dc2626;">Important:</strong> For security reasons, please change your password after logging in. If you did not request this reset, contact your administrator immediately.
+        </p>
+      `, platformName);
+    }
+
+    await transporter.sendMail({ from, to: email, subject, html });
+    console.log(`[email] Sent password reset credentials to=${email}`);
+    return true;
+  } catch (error) {
+    console.error(`[email] Failed password reset email to=${email}:`, error);
+    return false;
+  }
+};
 
 export const sendApprovalEmail = async (email: string, name: string, itemType: string, itemName: string) =>
   sendTemplateEmail('Content Approved', email, {

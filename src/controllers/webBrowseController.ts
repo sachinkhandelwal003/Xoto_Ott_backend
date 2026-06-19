@@ -33,14 +33,23 @@ const mapContentItem = (item: any, type: 'movie' | 'show') => {
 
 export const getWebBrowse = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const query = request.query as { type?: string; genre?: string; page?: string; limit?: string };
+    const query = request.query as { type?: string; genre?: string; page?: string; limit?: string; search?: string };
     const contentType = query.type || 'movie'; // 'movie', 'show', 'drama'
     const genreName = query.genre;
+    const searchTerm = query.search?.trim();
     const page = Math.max(1, Number(query.page || 1));
     const limit = Math.min(50, Math.max(1, Number(query.limit || 20)));
     const skip = (page - 1) * limit;
 
     let filter: any = { status: 'published' };
+
+    if (searchTerm) {
+      filter.$or = [
+        { title: new RegExp(searchTerm, 'i') },
+        { description: new RegExp(searchTerm, 'i') },
+        { tags: new RegExp(searchTerm, 'i') },
+      ];
+    }
 
     // Handle genre filtering
     if (genreName && genreName.toLowerCase() !== 'all') {

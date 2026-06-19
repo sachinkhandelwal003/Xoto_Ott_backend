@@ -26,6 +26,8 @@ import adminUsersRoutes from './adminUsers';
 import sectionsRoutes from './sections';
 import contentsRoutes from './contents';
 import episodesRoutes from './episodes';
+import countriesRoutes from './countries';
+import crewsRoutes from './crews';
 import likeRoutes from './like';
 import watchRoutes from './watch';
 import shareRoutes from './share';
@@ -41,8 +43,10 @@ import { getWebBrowse } from '../controllers/webBrowseController';
 import { getWebDetail } from '../controllers/webDetailController';
 import { getMovieDetail } from '../controllers/appMovieController';
 import adRoutes from './ad';
+import adminNotificationsRoutes from './adminNotifications';
 
 const router: FastifyPluginAsync = async (fastify) => {
+  fastify.register(adminNotificationsRoutes, { prefix: '/admin-notifications' });
   fastify.register(adRoutes);
   fastify.register(healthRoutes);
   fastify.register(authRoutes);
@@ -71,6 +75,8 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(sectionsRoutes, { prefix: '/sections' });
   fastify.register(contentsRoutes, { prefix: '/contents' });
   fastify.register(episodesRoutes, { prefix: '/episodes' });
+  fastify.register(countriesRoutes, { prefix: '/countries' });
+  fastify.register(crewsRoutes, { prefix: '/crews' });
 
   // Like / Unlike route
   fastify.register(likeRoutes);
@@ -113,6 +119,21 @@ const router: FastifyPluginAsync = async (fastify) => {
   
   // Web Detail page data
   fastify.get('/web-detail/:contentId', getWebDetail);
+
+  // Public notifications (broadcast only — no private user data)
+  fastify.get('/public/notifications', async (request, reply) => {
+    try {
+      const { NotificationLogModel } = await import('../models/NotificationLog');
+      const notifications = await NotificationLogModel.find({ type: { $in: ['all', 'broadcast', 'announcement', 'promo'] } })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('title text type createdAt')
+        .lean();
+      return reply.send({ success: true, data: notifications });
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, error: error.message });
+    }
+  });
 };
 
 export default router;

@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IMovie extends Document {
@@ -136,4 +137,5 @@ MovieSchema.index({ categories: 1 });
 MovieSchema.index({ trending: 1, featured: 1 });
 MovieSchema.index({ releaseDate: -1 });
 
+MovieSchema.plugin(adminAuditPlugin);
 export const MovieModel = mongoose.model<IMovie>('Movie', MovieSchema);

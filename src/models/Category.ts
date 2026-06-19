@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICategory extends Document {
@@ -35,4 +36,5 @@ const CategorySchema = new Schema<ICategory>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+CategorySchema.plugin(adminAuditPlugin);
 export const CategoryModel = mongoose.model<ICategory>('Category', CategorySchema);

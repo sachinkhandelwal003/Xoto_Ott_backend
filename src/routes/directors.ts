@@ -1,3 +1,4 @@
+import { requirePermission } from '../middlewares/rbac';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   listDirectors,
@@ -10,22 +11,22 @@ import {
 
 const directorsRoutes: FastifyPluginAsync = async (fastify, opts) => {
   // List all directors with pagination
-  fastify.get('/', listDirectors);
+  fastify.get('/', { onRequest: [requirePermission('directors', 'canView')] }, listDirectors);
 
   // Get director by ID
-  fastify.get('/item/:directorId', getDirectorById);
+  fastify.get('/item/:directorId', { onRequest: [requirePermission('directors', 'canView')] }, getDirectorById);
 
   // Create new director
-  fastify.post('/', createDirector);
+  fastify.post('/', { onRequest: [requirePermission('directors', 'canCreate')] }, createDirector);
 
   // Update director
-  fastify.put('/item/:directorId', updateDirector);
+  fastify.put('/item/:directorId', { onRequest: [requirePermission('directors', 'canEdit')] }, updateDirector);
 
   // Delete director
-  fastify.delete('/item/:directorId', deleteDirector);
+  fastify.delete('/item/:directorId', { onRequest: [requirePermission('directors', 'canDelete')] }, deleteDirector);
 
   // Bulk delete directors
-  fastify.post('/bulk-delete', bulkDeleteDirectors);
+  fastify.post('/bulk-delete', { onRequest: [requirePermission('directors', 'canCreate')] }, bulkDeleteDirectors);
 };
 
 export default directorsRoutes;

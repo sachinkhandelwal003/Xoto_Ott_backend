@@ -301,3 +301,116 @@ export const bulkDeleteSubscriptions = async (request: FastifyRequest, reply: Fa
     return reply.status(500).send({ success: false, error: error.message });
   }
 };
+
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+import { SettingsModel } from '../models/Settings';
+
+export const createRazorpayOrder = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { planId } = request.body as { planId: string };
+    
+    // Validate Plan
+    const plan = await SubscriptionPlanModel.findById(planId).lean();
+    if (!plan) {
+      return reply.status(404).send({ success: false, error: 'Plan not found' });
+    }
+
+    // Get settings
+    const settings = await SettingsModel.findOne().lean();
+    if (!settings?.razorpayEnabled || !settings?.razorpayKeyId || !settings?.razorpayKeySecret) {
+      return reply.status(400).send({ success: false, error: 'Razorpay is not configured or enabled' });
+    }
+
+    const instance = new Razorpay({
+      key_id: settings.razorpayKeyId,
+      key_secret: settings.razorpayKeySecret,
+    });
+
+    const amountInPaise = Math.round((plan.totalPrice || 0) * 100);
+
+    const order = await instance.orders.create({
+      amount: amountInPaise,
+      currency: settings.currencyCode || 'INR',
+      receipt: `receipt_${Date.now()}`,
+    });
+
+    return reply.send({
+      success: true,
+      order,
+    });
+  } catch (error: any) {
+    console.error('Razorpay Create Order Error:', error);
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+export const verifyRazorpayPayment = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      razorpay_signature, 
+      planId,
+      userId 
+    } = request.body as any;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !planId || !userId) {
+      return reply.status(400).send({ success: false, error: 'Missing payment details or plan details' });
+    }
+
+    const settings = await SettingsModel.findOne().lean();
+    if (!settings?.razorpayEnabled || !settings?.razorpayKeySecret) {
+      return reply.status(400).send({ success: false, error: 'Razorpay is not configured' });
+    }
+
+    // Verify signature
+    const text = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const generated_signature = crypto
+      .createHmac('sha256', settings.razorpayKeySecret)
+      .update(text)
+      .digest('hex');
+
+    if (generated_signature !== razorpay_signature) {
+      return reply.status(400).send({ success: false, error: 'Invalid payment signature' });
+    }
+
+    // Provision subscription
+    const plan = await SubscriptionPlanModel.findById(planId).lean();
+    if (!plan) {
+      return reply.status(404).send({ success: false, error: 'Plan not found' });
+    }
+
+    const body = {
+      userId,
+      planId,
+      paymentMethod: 'Razorpay',
+      status: 'active',
+      price: plan.totalPrice,
+      totalAmount: plan.totalPrice,
+      duration: plan.duration,
+      durationValue: plan.durationValue
+    };
+
+    const payload = await buildSubscriptionPayload(body);
+    const subscription = await SubscriptionModel.create(payload);
+
+    await UserModel.findByIdAndUpdate(userId, {
+      $set: {
+        subscriptionPlan: payload.plan,
+        subscriptionStatus: payload.status,
+        subscriptionExpiry: payload.endDate,
+        subscriptionPlanId: payload.planId
+      }
+    });
+
+    return reply.send({
+      success: true,
+      message: 'Payment verified and subscription activated successfully',
+      subscriptionId: subscription._id
+    });
+  } catch (error: any) {
+    console.error('Razorpay Verify Error:', error);
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};

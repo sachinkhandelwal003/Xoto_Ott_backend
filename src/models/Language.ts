@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ILanguage extends Document {
@@ -21,4 +22,5 @@ const LanguageSchema = new Schema<ILanguage>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+LanguageSchema.plugin(adminAuditPlugin);
 export const LanguageModel = mongoose.model<ILanguage>('Language', LanguageSchema);

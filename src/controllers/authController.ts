@@ -109,6 +109,7 @@ export const getMe = async (request: FastifyRequest, reply: FastifyReply) => {
     return { 
       user: { 
         ...admin, 
+        id: (admin._id as any)?.toString(),
         modulePermissions: mergedModulePermissions 
       } 
     };

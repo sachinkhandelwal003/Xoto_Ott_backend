@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISubscriptionPlan extends Document {
@@ -29,4 +30,5 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+SubscriptionPlanSchema.plugin(adminAuditPlugin);
 export const SubscriptionPlanModel = mongoose.model<ISubscriptionPlan>('SubscriptionPlan', SubscriptionPlanSchema);

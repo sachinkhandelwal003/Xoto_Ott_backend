@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SettingsModel } from '../models/Settings';
 import uploadHandler from '../lib/uploadHandler';
 import { updateEnvFile } from '../lib/envUpdater';
+import { sendWelcomeEmail } from '../lib/email';
 
 async function getOrCreateSettings() {
   let settings = await SettingsModel.findOne();
@@ -91,5 +92,47 @@ export const uploadSettingsLogos = async (request: FastifyRequest, reply: Fastif
   } catch (error: any) {
     console.error(error);
     return reply.status(500).send({ success: false, error: 'Upload failed' });
+  }
+};
+
+export const getEmailStatus = async (_request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const settings = await SettingsModel.findOne().lean();
+    const hasCredentials = !!(settings && (settings as any).mailUsername && (settings as any).mailPassword);
+    const hasEnvCredentials = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+    return reply.send({
+      success: true,
+      data: {
+        configured: hasCredentials || hasEnvCredentials,
+        fromDb: hasCredentials,
+        fromEnv: hasEnvCredentials,
+        host: (settings as any)?.mailHost || process.env.EMAIL_HOST || 'smtp.gmail.com',
+        port: (settings as any)?.mailPort || process.env.EMAIL_PORT || '587',
+        username: ((settings as any)?.mailUsername || process.env.EMAIL_USER || '').replace(/./g, '*'),
+        from: (settings as any)?.mailFrom || process.env.EMAIL_FROM || (settings as any)?.mailUsername || process.env.EMAIL_USER || '',
+      }
+    });
+  } catch (error: any) {
+    console.error(error);
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+export const testEmail = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const body = request.body as { to?: string };
+    const to = body?.to || 'test@example.com';
+    const sent = await sendWelcomeEmail(to, 'Test User', to, 'TestPassword123!');
+    if (sent) {
+      return reply.send({ success: true, message: 'Test email sent successfully. Check your inbox.' });
+    }
+    return reply.status(400).send({
+      success: false,
+      error: 'Email not sent. SMTP credentials are not configured.',
+      hint: 'Go to Settings → Mail and configure mailUsername, mailPassword, mailHost, and mailPort. Or set EMAIL_USER and EMAIL_PASS in your .env file.'
+    });
+  } catch (error: any) {
+    console.error(error);
+    return reply.status(500).send({ success: false, error: error.message });
   }
 };

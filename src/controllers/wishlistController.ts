@@ -120,14 +120,20 @@ export const getWishlist = async (request: FastifyRequest, reply: FastifyReply) 
       const isMovie = item.contentModelType === 'Movie';
       const c: any = isMovie ? movieMap.get(item.contentId.toString()) : contentMap.get(item.contentId.toString());
       if (!c) return null;
-      
-      const type = c.type === 'series' ? 'show' : 'movie';
+
+      // For Content model: use contentType field ('drama' | 'series' | 'movie')
+      // For Movie model: always 'movie'
+      const contentType: string = isMovie ? 'movie' : (c.contentType || c.type || 'series');
+      const type = contentType === 'drama' ? 'drama' : (c.type === 'series' || contentType === 'series' ? 'show' : 'movie');
+
       return {
         id: c._id.toString(),
+        contentId: item.contentId.toString(),
         title: c.title,
         poster: c.posterImage || c.thumbnail || '',
         backdrop: c.bannerImage || c.thumbnail || '',
         type,
+        contentType,
         year: c.year?.toString() || new Date(c.createdAt).getFullYear().toString(),
         duration: c.duration ? `${c.duration}m` : '120m',
         imdbRating: c.imdbRating?.toString() || (c.rating || '8.0'),

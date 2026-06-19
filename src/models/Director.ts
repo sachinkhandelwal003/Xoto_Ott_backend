@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IDirector extends Document {
@@ -42,4 +43,5 @@ const DirectorSchema = new Schema<IDirector>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+DirectorSchema.plugin(adminAuditPlugin);
 export const DirectorModel = mongoose.model<IDirector>('Director', DirectorSchema);

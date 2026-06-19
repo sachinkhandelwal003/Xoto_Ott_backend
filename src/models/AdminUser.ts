@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IModulePermissions {
@@ -21,6 +22,7 @@ export interface IModulePermissions {
   planLimits: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
   notifications: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
   notificationTemplates: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
+  settings: { canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean };
 }
 
 export interface IAdminUser extends Document {
@@ -60,6 +62,7 @@ const defaultModulePermissions: IModulePermissions = {
   planLimits: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   notifications: { canView: true, canCreate: false, canEdit: false, canDelete: false },
   notificationTemplates: { canView: true, canCreate: false, canEdit: false, canDelete: false },
+  settings: { canView: true, canCreate: false, canEdit: false, canDelete: false },
 };
 
 const AdminUserSchema = new Schema<IAdminUser>(
@@ -96,6 +99,7 @@ const AdminUserSchema = new Schema<IAdminUser>(
         planLimits: { canView: Boolean, canCreate: Boolean, canEdit: Boolean, canDelete: Boolean },
         notifications: { canView: Boolean, canCreate: Boolean, canEdit: Boolean, canDelete: Boolean },
         notificationTemplates: { canView: Boolean, canCreate: Boolean, canEdit: Boolean, canDelete: Boolean },
+        settings: { canView: Boolean, canCreate: Boolean, canEdit: Boolean, canDelete: Boolean },
       },
       default: defaultModulePermissions,
     },
@@ -107,4 +111,5 @@ const AdminUserSchema = new Schema<IAdminUser>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+AdminUserSchema.plugin(adminAuditPlugin);
 export const AdminUserModel = mongoose.model<IAdminUser>('AdminUser', AdminUserSchema);

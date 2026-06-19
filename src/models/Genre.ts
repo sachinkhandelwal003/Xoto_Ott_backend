@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IGenre extends Document {
@@ -38,4 +39,5 @@ const GenreSchema = new Schema<IGenre>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+GenreSchema.plugin(adminAuditPlugin);
 export const GenreModel = mongoose.model<IGenre>('Genre', GenreSchema);

@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { AdminUserModel } from '../models/AdminUser';
 import { logger } from '../lib/logger';
-import { sendWelcomeEmail } from '../lib/email';
+import { sendWelcomeEmail, sendAdminPasswordResetEmail } from '../lib/email';
+import { isRoleHigherThan } from '../middlewares/rbac';
+
 
 // Default module permissions to ensure we have all fields
 const DEFAULT_MODULE_PERMISSIONS = {
@@ -147,6 +149,16 @@ export const createAdminUser = async (request: FastifyRequest, reply: FastifyRep
     const body = request.body as any;
     const currentUser = (request as any).user;
 
+    // Role hierarchy validation: cannot create user with higher role than yourself
+    if (body.role && currentUser?.role) {
+      if (isRoleHigherThan(body.role, currentUser.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: `Forbidden — You cannot create a user with role '${body.role}' because it exceeds your current role '${currentUser.role}'`,
+        });
+      }
+    }
+
     // Check if email already exists
     const existingUser = await AdminUserModel.findOne({ email: body.email.toLowerCase() });
     if (existingUser) {
@@ -204,6 +216,17 @@ export const updateAdminUser = async (request: FastifyRequest, reply: FastifyRep
   try {
     const { id } = request.params as { id: string };
     const body = request.body as any;
+    const currentUser = (request as any).user;
+
+    // Role hierarchy validation: cannot promote user above your own role
+    if (body.role && currentUser?.role) {
+      if (isRoleHigherThan(body.role, currentUser.role)) {
+        return reply.status(403).send({
+          success: false,
+          error: `Forbidden — You cannot assign role '${body.role}' because it exceeds your current role '${currentUser.role}'`,
+        });
+      }
+    }
 
     // Check if email is being changed and if it already exists
     if (body.email) {
@@ -275,6 +298,15 @@ export const deleteAdminUser = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(400).send({ success: false, error: 'Cannot delete your own account' });
     }
 
+    // Cannot delete users with higher or equal role
+    const target = await AdminUserModel.findById(id).lean();
+    if (!target) {
+      return reply.status(404).send({ success: false, error: 'User not found' });
+    }
+    if (!isRoleHigherThan(currentUser?.role, target.role)) {
+      return reply.status(403).send({ success: false, error: 'Forbidden — Cannot delete a user with equal or higher role' });
+    }
+
     const user = await AdminUserModel.findByIdAndDelete(id);
 
     if (!user) {
@@ -292,10 +324,16 @@ export const deleteAdminUser = async (request: FastifyRequest, reply: FastifyRep
 export const resetUserPassword = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { id } = request.params as { id: string };
+    const currentUser = (request as any).user;
 
     const user = await AdminUserModel.findById(id);
     if (!user) {
       return reply.status(404).send({ success: false, error: 'User not found' });
+    }
+
+    // Cannot reset password of users with higher or equal role
+    if (!isRoleHigherThan(currentUser?.role, user.role)) {
+      return reply.status(403).send({ success: false, error: 'Forbidden — Cannot reset password of a user with equal or higher role' });
     }
 
     // Generate new password
@@ -306,7 +344,7 @@ export const resetUserPassword = async (request: FastifyRequest, reply: FastifyR
     await user.save();
 
     // Send email with new password
-    const emailSent = await sendWelcomeEmail(user.email, user.name, user.email, password);
+    const emailSent = await sendAdminPasswordResetEmail(user.email, user.name, user.email, password);
 
     return reply.send({
       success: true,
@@ -342,6 +380,10 @@ export const updateOwnProfile = async (request: FastifyRequest, reply: FastifyRe
         return reply.status(400).send({ success: false, error: 'Email already exists' });
       }
       updateData.email = body.email.toLowerCase();
+    }
+    // Prevent self-role-change
+    if (body.role) {
+      return reply.status(403).send({ success: false, error: 'Forbidden — You cannot change your own role' });
     }
     if (body.currentPassword && body.newPassword) {
       // Verify current password
@@ -395,6 +437,11 @@ export const toggleUserStatus = async (request: FastifyRequest, reply: FastifyRe
     const user = await AdminUserModel.findById(id);
     if (!user) {
       return reply.status(404).send({ success: false, error: 'User not found' });
+    }
+
+    // Cannot toggle status of users with higher or equal role
+    if (!isRoleHigherThan(currentUser?.role, user.role)) {
+      return reply.status(403).send({ success: false, error: 'Forbidden — Cannot toggle status of a user with equal or higher role' });
     }
 
     user.isActive = !user.isActive;

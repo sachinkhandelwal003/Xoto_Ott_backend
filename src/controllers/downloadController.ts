@@ -197,37 +197,35 @@ export const getDownloadsList = async (request: FastifyRequest, reply: FastifyRe
       const isMovie = item.contentModelType === 'Movie';
       if (isMovie) {
         const m = movieMap.get(item.contentId.toString());
-        if (!m) return null;
         return {
           id: item._id.toString(),
           contentId: item.contentId.toString(),
-          title: m.title,
-          thumbnail: m.thumbnail,
-          duration: m.duration,
-          year: m.year,
-          rating: m.rating,
+          title: m?.title || 'Movie',
+          thumbnail: m?.thumbnail || '',
+          duration: m?.duration || 0,
+          year: m?.year || null,
+          rating: m?.rating || null,
           type: 'movie',
           downloadedAt: item.createdAt
         };
       } else {
         const d = dramaMap.get(item.contentId.toString());
         const e = item.episodeId ? episodeMap.get(item.episodeId.toString()) : null;
-        if (!d || !e) return null;
         return {
           id: item._id.toString(),
           contentId: item.contentId.toString(),
-          episodeId: item.episodeId?.toString(),
-          title: e.title,
-          parentTitle: d.title,
-          thumbnail: e.thumbnail || d.thumbnail,
-          duration: e.duration,
-          season: e.season,
-          episodeNumber: e.episode,
+          episodeId: item.episodeId?.toString() || null,
+          title: e?.title || d?.title || 'Episode',
+          parentTitle: d?.title || '',
+          thumbnail: e?.thumbnail || d?.thumbnail || '',
+          duration: e?.duration || 0,
+          season: e?.season || null,
+          episodeNumber: (e as any)?.episode || null,
           type: 'drama',
           downloadedAt: item.createdAt
         };
       }
-    }).filter(Boolean);
+    });
 
     return reply.send({
       success: true,
@@ -258,12 +256,17 @@ export const removeDownload = async (request: FastifyRequest, reply: FastifyRepl
     const { id } = request.params as { id: string };
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return reply.status(400).send({ success: false, message: 'Invalid download log ID' });
+      return reply.status(400).send({ success: false, message: 'Invalid ID' });
     }
 
-    const download = await UserDownloadModel.findOneAndDelete({ _id: id, userId });
+    // Try deleting by download log _id first, then by contentId as fallback
+    // (some mobile clients send contentId instead of the log _id)
+    let download = await UserDownloadModel.findOneAndDelete({ _id: id, userId });
     if (!download) {
-      return reply.status(404).send({ success: false, message: 'Download log not found' });
+      download = await UserDownloadModel.findOneAndDelete({ contentId: id, userId });
+    }
+    if (!download) {
+      return reply.status(404).send({ success: false, message: 'Download not found or already removed' });
     }
 
     return reply.send({

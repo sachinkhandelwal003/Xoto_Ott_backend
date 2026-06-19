@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IEpisode extends Document {
@@ -74,4 +75,5 @@ const EpisodeSchema = new Schema<IEpisode>(
 
 EpisodeSchema.index({ contentId: 1, season: 1, episode: 1 }, { unique: true });
 
+EpisodeSchema.plugin(adminAuditPlugin);
 export const EpisodeModel = mongoose.model<IEpisode>('Episode', EpisodeSchema);

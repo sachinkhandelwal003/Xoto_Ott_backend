@@ -1,5 +1,6 @@
 
 import type { FastifyPluginAsync } from 'fastify';
+import { authenticate } from '../middlewares/auth';
 import {
   getDashboardStats,
   getRevenueData,
@@ -11,13 +12,13 @@ import {
 } from '../controllers/dashboardController';
 
 const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/dashboard/stats', getDashboardStats);
-  fastify.get('/dashboard/revenue', getRevenueData);
-  fastify.get('/dashboard/new-subscribers', getNewSubscribersData);
-  fastify.get('/dashboard/most-watched', getMostWatchedData);
-  fastify.get('/dashboard/top-genres', getTopGenresData);
-  fastify.get('/dashboard/reviews', getReviews);
-  fastify.get('/dashboard/transactions', getTransactions);
+  fastify.get('/dashboard/stats', { onRequest: [authenticate] }, getDashboardStats);
+  fastify.get('/dashboard/revenue', { onRequest: [authenticate] }, getRevenueData);
+  fastify.get('/dashboard/new-subscribers', { onRequest: [authenticate] }, getNewSubscribersData);
+  fastify.get('/dashboard/most-watched', { onRequest: [authenticate] }, getMostWatchedData);
+  fastify.get('/dashboard/top-genres', { onRequest: [authenticate] }, getTopGenresData);
+  fastify.get('/dashboard/reviews', { onRequest: [authenticate] }, getReviews);
+  fastify.get('/dashboard/transactions', { onRequest: [authenticate] }, getTransactions);
 };
 
 export default dashboardRoutes;

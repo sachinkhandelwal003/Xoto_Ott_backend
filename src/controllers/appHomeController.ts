@@ -173,7 +173,7 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const banners = await BannerModel.find({
       isActive: true,
       targetPlatforms: platform,
-      contentType: { $in: [tab, 'both'] },
+      contentType: tab, // Strictly match the tab to prevent mixing movies and dramas
       $and: [
         { $or: [{ startDate: { $exists: false } }, { startDate: { $lte: now } }] },
         { $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }] },

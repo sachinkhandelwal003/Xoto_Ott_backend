@@ -1,11 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { authenticate } from '../middlewares/auth';
-import { getSettings, updateSettings, uploadSettingsLogos } from '../controllers/settingsController';
+import { requirePermission } from '../middlewares/rbac';
+import { getSettings, updateSettings, uploadSettingsLogos, getEmailStatus, testEmail } from '../controllers/settingsController';
 
 const settingsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/settings', getSettings);
-  fastify.put('/settings', { onRequest: [authenticate] }, updateSettings);
-  fastify.post('/settings/upload-logos', { onRequest: [authenticate] }, uploadSettingsLogos);
+  fastify.get('/settings', { onRequest: [requirePermission('settings', 'canView')] }, getSettings);
+  fastify.put('/settings', { onRequest: [requirePermission('settings', 'canEdit')] }, updateSettings);
+  fastify.post('/settings/upload-logos', { onRequest: [requirePermission('settings', 'canEdit')] }, uploadSettingsLogos);
+  fastify.get('/settings/email-status', { onRequest: [requirePermission('settings', 'canView')] }, getEmailStatus);
+  fastify.post('/settings/test-email', { onRequest: [requirePermission('settings', 'canEdit')] }, testEmail);
 };
 
 export default settingsRoutes;

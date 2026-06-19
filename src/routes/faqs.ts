@@ -1,3 +1,4 @@
+import { requirePermission } from '../middlewares/rbac';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   listFAQs,
@@ -10,22 +11,22 @@ import {
 
 const faqsRoutes: FastifyPluginAsync = async (fastify, opts) => {
   // List all FAQs with pagination
-  fastify.get('/', listFAQs);
+  fastify.get('/', { onRequest: [requirePermission('faqs', 'canView')] }, listFAQs);
 
   // Get FAQ by ID
-  fastify.get('/item/:faqId', getFAQById);
+  fastify.get('/item/:faqId', { onRequest: [requirePermission('faqs', 'canView')] }, getFAQById);
 
   // Create new FAQ
-  fastify.post('/', createFAQ);
+  fastify.post('/', { onRequest: [requirePermission('faqs', 'canCreate')] }, createFAQ);
 
   // Update FAQ
-  fastify.put('/item/:faqId', updateFAQ);
+  fastify.put('/item/:faqId', { onRequest: [requirePermission('faqs', 'canEdit')] }, updateFAQ);
 
   // Delete FAQ
-  fastify.delete('/item/:faqId', deleteFAQ);
+  fastify.delete('/item/:faqId', { onRequest: [requirePermission('faqs', 'canDelete')] }, deleteFAQ);
 
   // Bulk delete FAQs
-  fastify.post('/bulk-delete', bulkDeleteFAQs);
+  fastify.post('/bulk-delete', { onRequest: [requirePermission('faqs', 'canCreate')] }, bulkDeleteFAQs);
 };
 
 export default faqsRoutes;

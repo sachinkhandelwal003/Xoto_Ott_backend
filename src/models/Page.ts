@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IPage extends Document {
@@ -21,4 +22,5 @@ const PageSchema = new Schema<IPage>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+PageSchema.plugin(adminAuditPlugin);
 export const PageModel = mongoose.model<IPage>('Page', PageSchema);

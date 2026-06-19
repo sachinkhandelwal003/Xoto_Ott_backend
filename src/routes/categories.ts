@@ -1,3 +1,4 @@
+import { requirePermission } from '../middlewares/rbac';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   listCategories,
@@ -10,17 +11,17 @@ import {
 
 const categories: FastifyPluginAsync = async (fastify) => {
   // Get all categories
-  fastify.get('/', listCategories);
+  fastify.get('/', { onRequest: [requirePermission('categories', 'canView')] }, listCategories);
   // Get single category
-  fastify.get('/item/:categoryId', getCategoryById);
+  fastify.get('/item/:categoryId', { onRequest: [requirePermission('categories', 'canView')] }, getCategoryById);
   // Create category
-  fastify.post('/', createCategory);
+  fastify.post('/', { onRequest: [requirePermission('categories', 'canCreate')] }, createCategory);
   // Update category
-  fastify.put('/item/:categoryId', updateCategory);
+  fastify.put('/item/:categoryId', { onRequest: [requirePermission('categories', 'canEdit')] }, updateCategory);
   // Delete category
-  fastify.delete('/item/:categoryId', deleteCategory);
+  fastify.delete('/item/:categoryId', { onRequest: [requirePermission('categories', 'canDelete')] }, deleteCategory);
   // Bulk delete categories
-  fastify.post('/bulk-delete', bulkDeleteCategories);
+  fastify.post('/bulk-delete', { onRequest: [requirePermission('categories', 'canCreate')] }, bulkDeleteCategories);
 };
 
 export default categories;

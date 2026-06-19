@@ -1,3 +1,4 @@
+import { adminAuditPlugin } from '../middlewares/adminAuditPlugin';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IContent extends Document {
@@ -95,7 +96,7 @@ const ContentSchema = new Schema<IContent>(
     trending: { type: Boolean, default: false },
     isNewContent: { type: Boolean, default: true },
     isExclusive: { type: Boolean, default: false },
-    downloadAllowed: { type: Boolean, default: false },
+    downloadAllowed: { type: Boolean, default: true },
     cast: [{ name: String, role: String, photo: String, character: String }],
     crew: [{ name: String, role: String }],
     director: String,
@@ -119,4 +120,5 @@ ContentSchema.index({ status: 1, type: 1 });
 ContentSchema.index({ genres: 1 });
 ContentSchema.index({ trending: 1, featured: 1 });
 
+ContentSchema.plugin(adminAuditPlugin);
 export const ContentModel = mongoose.model<IContent>('Content', ContentSchema);

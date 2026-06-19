@@ -76,3 +76,26 @@ export const deleteSection = async (request: FastifyRequest, reply: FastifyReply
     reply.status(500).send({ success: false, error: 'Failed to delete section' });
   }
 };
+
+export const reorderSections = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { updates } = request.body as { updates: { id: string, position: number }[] };
+    
+    // Bulk update positions
+    const operations = updates.map(update => ({
+      updateOne: {
+        filter: { _id: update.id },
+        update: { $set: { position: update.position } }
+      }
+    }));
+    
+    if (operations.length > 0) {
+      await SectionModel.bulkWrite(operations);
+    }
+    
+    reply.send({ success: true, message: 'Sections reordered successfully' });
+  } catch (error) {
+    request.log.error(error);
+    reply.status(500).send({ success: false, error: 'Failed to reorder sections' });
+  }
+};

@@ -112,6 +112,10 @@ export interface ISettings extends Document {
   adMobInterstitialIos: string;
   vastPrerollUrl: string;
   vastMidrollUrl: string;
+  // Payments
+  razorpayEnabled: boolean;
+  razorpayKeyId: string;
+  razorpayKeySecret: string;
 }
 
 const SettingsSchema = new Schema<ISettings>(
@@ -227,6 +231,10 @@ const SettingsSchema = new Schema<ISettings>(
     adMobInterstitialIos: { type: String, default: '' },
     vastPrerollUrl: { type: String, default: '' },
     vastMidrollUrl: { type: String, default: '' },
+    // Payments
+    razorpayEnabled: { type: Boolean, default: false },
+    razorpayKeyId: { type: String, default: '' },
+    razorpayKeySecret: { type: String, default: '' },
   },
   { timestamps: true }
 );
