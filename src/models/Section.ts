@@ -12,6 +12,8 @@ export interface ISection extends Document {
   isActive: boolean;
   // Layout options for the app
   layout?: 'horizontal' | 'vertical' | 'grid-2' | 'grid-3' | 'reels'; // Horizontal scroll, vertical list, 2-column, 3-column, or reels-style
+  contentSelection?: 'dynamic' | 'manual' | 'mixed';
+  manualContentIds?: mongoose.Types.ObjectId[] | string[];
   showViewAll?: boolean; // Whether to show "View All" button
   itemType?: 'card' | 'poster' | 'thumbnail'; // Type of item display
   createdAt: Date;
@@ -40,6 +42,13 @@ const SectionSchema = new Schema<ISection>(
       enum: ['horizontal', 'vertical', 'grid-2', 'grid-3', 'reels'], 
       default: 'horizontal' 
     },
+    // Content selection mode
+    contentSelection: {
+      type: String,
+      enum: ['dynamic', 'manual', 'mixed'],
+      default: 'dynamic'
+    },
+    manualContentIds: [{ type: Schema.Types.ObjectId, refPath: 'contentType' }],
     showViewAll: { type: Boolean, default: true },
     itemType: { 
       type: String, 

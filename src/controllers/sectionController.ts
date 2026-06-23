@@ -1,5 +1,26 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { SectionModel } from '../models/Section';
+import { ContentModel } from '../models/Content';
+import { MovieModel } from '../models/Movie';
+
+const syncManualContent = async (section: any) => {
+  const model = section.contentType === 'movie' ? MovieModel : ContentModel;
+  const sectionIdStr = section._id.toString();
+  
+  // Remove this section from all contents
+  await model.updateMany(
+    { sections: sectionIdStr },
+    { $pull: { sections: sectionIdStr } }
+  );
+  
+  // Add this section to the new manual content IDs
+  if (section.manualContentIds && section.manualContentIds.length > 0) {
+    await model.updateMany(
+      { _id: { $in: section.manualContentIds } },
+      { $addToSet: { sections: sectionIdStr } }
+    );
+  }
+};
 
 export const getSections = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -39,6 +60,7 @@ export const createSection = async (request: FastifyRequest, reply: FastifyReply
   try {
     const body = request.body as any;
     const section = await SectionModel.create(body);
+    await syncManualContent(section);
     reply.status(201).send({ success: true, data: section });
   } catch (error) {
     request.log.error(error);
@@ -55,6 +77,7 @@ export const updateSection = async (request: FastifyRequest, reply: FastifyReply
       reply.status(404).send({ success: false, error: 'Section not found' });
       return;
     }
+    await syncManualContent(section);
     reply.send({ success: true, data: section });
   } catch (error) {
     request.log.error(error);
@@ -70,6 +93,11 @@ export const deleteSection = async (request: FastifyRequest, reply: FastifyReply
       reply.status(404).send({ success: false, error: 'Section not found' });
       return;
     }
+    const model = section.contentType === 'movie' ? MovieModel : ContentModel;
+    await model.updateMany(
+      { sections: section._id.toString() },
+      { $pull: { sections: section._id.toString() } }
+    );
     reply.send({ success: true, message: 'Section deleted successfully' });
   } catch (error) {
     request.log.error(error);
@@ -81,7 +109,6 @@ export const reorderSections = async (request: FastifyRequest, reply: FastifyRep
   try {
     const { updates } = request.body as { updates: { id: string, position: number }[] };
     
-    // Bulk update positions
     const operations = updates.map(update => ({
       updateOne: {
         filter: { _id: update.id },

@@ -285,3 +285,25 @@ export const removeDownload = async (request: FastifyRequest, reply: FastifyRepl
     return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
   }
 };
+
+export const removeAllDownloads = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userPayload = (request as any).user;
+    if (!userPayload || !userPayload.id) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    const userId = userPayload.id;
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const result = await UserDownloadModel.deleteMany({ userId: userObjectId });
+
+    return reply.send({
+      success: true,
+      message: 'All downloads deleted successfully.',
+      deletedCount: result.deletedCount
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error removing all downloads');
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+  }
+};

@@ -1,7 +1,21 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { MovieModel } from '../models/Movie';
+import { SectionModel } from '../models/Section';
 import { logger } from '../lib/logger';
 import { sendApprovalEmail, sendRejectionEmail } from '../lib/email';
+
+const syncSections = async (contentIdStr: string, sections: string[] | undefined) => {
+  await SectionModel.updateMany(
+    { manualContentIds: contentIdStr },
+    { $pull: { manualContentIds: contentIdStr } }
+  );
+  if (sections && Array.isArray(sections) && sections.length > 0) {
+    await SectionModel.updateMany(
+      { _id: { $in: sections } },
+      { $addToSet: { manualContentIds: contentIdStr } }
+    );
+  }
+};
 
 // Get all movies with pagination and filtering
 export const getAllMovies = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -116,6 +130,7 @@ export const createMovie = async (request: FastifyRequest, reply: FastifyReply) 
     const body = request.body as any;
 
     const movie = await MovieModel.create(body);
+    await syncSections(movie._id.toString(), body.sections);
 
     return reply.status(201).send({
       success: true,
@@ -152,6 +167,10 @@ export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) 
 
     if (!movie) {
       return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    if (body.sections !== undefined) {
+      await syncSections(id, body.sections);
     }
 
     return reply.send({
@@ -297,6 +316,8 @@ export const deleteMovie = async (request: FastifyRequest, reply: FastifyReply) 
     if (!movie) {
       return reply.status(404).send({ success: false, error: 'Movie not found' });
     }
+
+    await syncSections(id, []);
 
     return reply.send({ success: true, message: 'Movie deleted successfully' });
   } catch (error: any) {

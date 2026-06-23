@@ -1,9 +1,23 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { ContentModel } from '../models/Content';
 import { EpisodeModel } from '../models/Episode';
+import { SectionModel } from '../models/Section';
 import { Types } from 'mongoose';
 import { logger } from '../lib/logger';
 import { createEpisodeSlices } from './categoryController';
+
+const syncSections = async (contentIdStr: string, sections: string[] | undefined) => {
+  await SectionModel.updateMany(
+    { manualContentIds: contentIdStr },
+    { $pull: { manualContentIds: contentIdStr } }
+  );
+  if (sections && Array.isArray(sections) && sections.length > 0) {
+    await SectionModel.updateMany(
+      { _id: { $in: sections } },
+      { $addToSet: { manualContentIds: contentIdStr } }
+    );
+  }
+};
 
 export const getAllContents = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -103,6 +117,7 @@ export const createContent = async (request: FastifyRequest, reply: FastifyReply
     if (!body.contentType) body.contentType = 'drama';
 
     const content = await ContentModel.create(body);
+    await syncSections(content._id.toString(), body.sections);
 
     return reply.status(201).send({
       success: true,
@@ -128,6 +143,10 @@ export const updateContent = async (request: FastifyRequest, reply: FastifyReply
     if (!content) {
       return reply.status(404).send({ success: false, error: 'Content not found' });
     }
+    
+    if (body.sections !== undefined) {
+      await syncSections(id, body.sections);
+    }
 
     return reply.send({
       success: true,
@@ -147,6 +166,8 @@ export const deleteContent = async (request: FastifyRequest, reply: FastifyReply
     if (!content) {
       return reply.status(404).send({ success: false, error: 'Content not found' });
     }
+
+    await syncSections(id, []);
 
     // Delete associated episodes
     await EpisodeModel.deleteMany({ contentId: id });

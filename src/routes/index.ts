@@ -88,7 +88,7 @@ const router: FastifyPluginAsync = async (fastify) => {
   fastify.register(shareRoutes);
 
   // Wishlist route
-  fastify.register(wishlistRoutes);
+  fastify.register(wishlistRoutes, { prefix: '/app' });
 
   // App Profile / Settings route
   fastify.register(appProfileRoutes, { prefix: '/app' });

@@ -164,7 +164,7 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     // Get sections from database, or fallback to default
     const dbSections = await SectionModel.find({ 
       contentType: tab, isActive: true })
-      .select('key title category contentType sortBy limit position isActive layout showViewAll itemType filter')
+      .select('key title category contentType sortBy limit position isActive layout showViewAll itemType filter contentSelection manualContentIds')
       .sort({ position: 1 })
       .lean();
     let sectionsToFetch = dbSections.length > 0 ? dbSections : getFallbackSections(tab);
@@ -186,42 +186,74 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     // Fetch content for each section
     const sectionPromises = sectionsToFetch.map(async (section) => {
-      let content;
-      if (tab === 'drama') {
-        const filter: any = { type: 'series', status: 'published', contentType: 'drama', ...section.filter };
-        if (preferredLanguage) {
-          filter.languages = preferredLanguage;
+      let content: any[] = [];
+      const manualIds = (section as any).manualContentIds || [];
+      const hasManual = manualIds.length > 0;
+
+      const buildFilter = (base: any) => {
+        if ((section as any).contentSelection === 'manual') {
+          return hasManual ? { ...base, _id: { $in: manualIds } } : null;
+        } else if ((section as any).contentSelection === 'mixed' && hasManual) {
+          return {
+            $or: [
+              { ...base, ...(section.filter || {}) },
+              { ...base, _id: { $in: manualIds } }
+            ]
+          };
+        } else {
+          return { ...base, ...(section.filter || {}) };
         }
-        content = await ContentModel.find(filter)
-          .sort(section.sortBy)
-          .limit(section.limit)
-          .lean();
+      };
+
+      if (tab === 'drama') {
+        const baseFilter: any = { type: 'series', status: 'published', contentType: 'drama' };
+        if (preferredLanguage) {
+          baseFilter.languages = preferredLanguage;
+        }
+        
+        const filter = buildFilter(baseFilter);
+        if (filter) {
+          content = await ContentModel.find(filter)
+            .sort(section.sortBy)
+            .limit(section.limit)
+            .lean();
+        }
 
         // Fallback if no matching language content
         if (content.length === 0 && preferredLanguage) {
-          const fallbackFilter = { type: 'series', status: 'published', contentType: 'drama', ...section.filter };
-          content = await ContentModel.find(fallbackFilter)
+          const fallbackBase = { type: 'series', status: 'published', contentType: 'drama' };
+          const fallbackFilter = buildFilter(fallbackBase);
+          if (fallbackFilter) {
+            content = await ContentModel.find(fallbackFilter)
+              .sort(section.sortBy)
+              .limit(section.limit)
+              .lean();
+          }
+        }
+      } else {
+        const baseFilter: any = { status: 'published' };
+        if (targetLanguageId) {
+          baseFilter.languages = targetLanguageId;
+        }
+        
+        const filter = buildFilter(baseFilter);
+        if (filter) {
+          content = await MovieModel.find(filter)
             .sort(section.sortBy)
             .limit(section.limit)
             .lean();
         }
-      } else {
-        const filter: any = { status: 'published', ...section.filter };
-        if (targetLanguageId) {
-          filter.languages = targetLanguageId;
-        }
-        content = await MovieModel.find(filter)
-          .sort(section.sortBy)
-          .limit(section.limit)
-          .lean();
 
         // Fallback if no matching language content
         if (content.length === 0 && targetLanguageId) {
-          const fallbackFilter = { status: 'published', ...section.filter };
-          content = await MovieModel.find(fallbackFilter)
-            .sort(section.sortBy)
-            .limit(section.limit)
-            .lean();
+          const fallbackBase = { status: 'published' };
+          const fallbackFilter = buildFilter(fallbackBase);
+          if (fallbackFilter) {
+            content = await MovieModel.find(fallbackFilter)
+              .sort(section.sortBy)
+              .limit(section.limit)
+              .lean();
+          }
         }
       }
       return { ...section, content };

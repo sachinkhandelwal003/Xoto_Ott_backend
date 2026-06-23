@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { requestDownload, getDownloadsList, removeDownload } from '../controllers/downloadController';
+import { requestDownload, getDownloadsList, removeDownload, removeAllDownloads } from '../controllers/downloadController';
 
 const downloadRoutes: FastifyPluginAsync = async (fastify) => {
   // Requires authentication
@@ -16,6 +16,9 @@ const downloadRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/app/downloads - Get user's active downloads list
   fastify.get('/downloads', getDownloadsList);
+
+  // DELETE /api/app/downloads - Remove ALL user's downloads at once
+  fastify.delete('/downloads', removeAllDownloads);
 
   // DELETE /api/app/downloads/:id - Remove a download log
   fastify.delete('/downloads/:id', removeDownload);
