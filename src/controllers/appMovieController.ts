@@ -57,11 +57,13 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
     let isDownloaded = false;
 
     if (userId) {
+      // Cast userId string to ObjectId for accurate DB lookups
+      const userObjectId = new mongoose.Types.ObjectId(userId);
       const [likeDoc, wishlistDoc, progressDoc, downloadDoc] = await Promise.all([
-        UserLikeModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
-        UserWishlistModel.findOne({ userId, contentId: movie._id }).lean(),
-        UserWatchProgressModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
-        UserDownloadModel.findOne({ userId, contentId: movie._id, episodeId: null }).lean(),
+        UserLikeModel.findOne({ userId: userObjectId, contentId: movie._id, episodeId: null }).lean(),
+        UserWishlistModel.findOne({ userId: userObjectId, contentId: movie._id }).lean(),
+        UserWatchProgressModel.findOne({ userId: userObjectId, contentId: movie._id, episodeId: null }).lean(),
+        UserDownloadModel.findOne({ userId: userObjectId, contentId: movie._id, episodeId: null }).lean(),
       ]);
       isLikedByUser = !!likeDoc;
       isWishlisted = !!wishlistDoc;

@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import { PageModel } from '../models/Page';
 import { UserDownloadModel } from '../models/UserDownload';
 import { UserWishlistModel } from '../models/UserWishlist';
+import { UserLikeModel } from '../models/UserLike';
 import { MovieModel } from '../models/Movie';
 import { EpisodeModel } from '../models/Episode';
 import { logger } from '../lib/logger';
@@ -39,13 +40,17 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
   try {
     const userId = getOptionalUserId(request);
     
-    // 1. Fetch User, Downloads list (limited to 5 items), and Wishlist list
+    // 1. Fetch User, Downloads list (limited to 5 items), Wishlist list, and Likes
     let userProfile = null;
     let downloadsList: any[] = [];
     let wishlistList: any[] = [];
+    let likesList: any[] = [];
 
     if (userId) {
-      const user = await UserModel.findById(userId).lean();
+      // Cast userId string to ObjectId for all DB queries
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+
+      const user = await UserModel.findById(userObjectId).lean();
       if (user) {
         // Calculate user sequential number and dynamically format Display ID
         const userNumber = await UserModel.countDocuments({ _id: { $lte: user._id } });
@@ -72,8 +77,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         };
       }
 
-      // Query latest 5 downloads
-      const downloads = await UserDownloadModel.find({ userId })
+      // Query latest 5 downloads (cast userId to ObjectId)
+      const downloads = await UserDownloadModel.find({ userId: userObjectId })
         .sort({ createdAt: -1 })
         .limit(5)
         .lean();
@@ -132,8 +137,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         }).filter(Boolean);
       }
 
-      // Query user's wishlist
-      const wishlistItems = await UserWishlistModel.find({ userId })
+      // Query user's wishlist (cast userId to ObjectId)
+      const wishlistItems = await UserWishlistModel.find({ userId: userObjectId })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -166,6 +171,44 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
             rating: c.rating || null,
             duration: c.duration || null,
             addedAt: item.createdAt
+          };
+        }).filter(Boolean);
+      }
+
+      // Query user's liked content (movies + dramas, cast userId to ObjectId)
+      const likedItems = await UserLikeModel.find({ userId: userObjectId, episodeId: null })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean();
+
+      if (likedItems.length > 0) {
+        const lMovieIds = likedItems.filter(i => i.contentModelType === 'Movie').map(i => i.contentId);
+        const lContentIds = likedItems.filter(i => i.contentModelType === 'Content').map(i => i.contentId);
+
+        const [lMovies, lContents] = await Promise.all([
+          lMovieIds.length > 0 ? MovieModel.find({ _id: { $in: lMovieIds } }).select('title thumbnail bannerImage posterImage year rating duration views type').lean() : Promise.resolve([]),
+          lContentIds.length > 0 ? ContentModel.find({ _id: { $in: lContentIds } }).select('title thumbnail bannerImage posterImage year rating duration views type contentType').lean() : Promise.resolve([]),
+        ]);
+
+        const lMovieMap = new Map(lMovies.map(m => [m._id.toString(), m]));
+        const lContentMap = new Map(lContents.map(c => [c._id.toString(), c]));
+
+        likesList = likedItems.map(item => {
+          const isMovie = item.contentModelType === 'Movie';
+          const c: any = isMovie ? lMovieMap.get(item.contentId.toString()) : lContentMap.get(item.contentId.toString());
+          if (!c) return null;
+          return {
+            id: c._id.toString(),
+            title: c.title,
+            thumbnail: c.thumbnail,
+            bannerImage: c.bannerImage || null,
+            posterImage: c.posterImage || c.thumbnail || '',
+            type: isMovie ? 'movie' : (c.contentType === 'drama' ? 'drama' : 'series'),
+            views: c.views || 0,
+            year: c.year || null,
+            rating: c.rating || null,
+            duration: c.duration || null,
+            likedAt: item.createdAt
           };
         }).filter(Boolean);
       }
@@ -321,6 +364,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         appSettings,
         downloads: downloadsList,
         wishlist: wishlistList,
+        likes: likesList,
         languages: languages.map(lang => ({
           id: lang._id.toString(),
           name: lang.name,

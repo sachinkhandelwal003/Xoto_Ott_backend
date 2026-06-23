@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import mongoose from 'mongoose';
 import { UserWishlistModel } from '../models/UserWishlist';
 import { ContentModel } from '../models/Content';
 import { MovieModel } from '../models/Movie';
@@ -30,6 +31,8 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     const userId = user.id;
+    // Cast userId string to ObjectId for all DB queries
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
     // Verify content exists
     const Model = isMovie ? MovieModel : ContentModel as any;
@@ -38,12 +41,12 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(404).send({ success: false, message: 'Content not found' });
     }
 
-    const existingWishlist = await UserWishlistModel.findOne({ userId, contentId });
+    const existingWishlist = await UserWishlistModel.findOne({ userId: userObjectId, contentId });
 
     if (existingWishlist) {
       // Remove from wishlist
       await UserWishlistModel.deleteOne({ _id: existingWishlist._id });
-      await UserModel.findByIdAndUpdate(userId, { $inc: { watchlistCount: -1 } });
+      await UserModel.findByIdAndUpdate(userObjectId, { $inc: { watchlistCount: -1 } });
       
       return reply.send({
         success: true,
@@ -57,11 +60,11 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
     } else {
       // Add to wishlist
       const newWishlist = await UserWishlistModel.create({
-        userId,
+        userId: userObjectId,
         contentId,
         contentModelType,
       });
-      await UserModel.findByIdAndUpdate(userId, { $inc: { watchlistCount: 1 } });
+      await UserModel.findByIdAndUpdate(userObjectId, { $inc: { watchlistCount: 1 } });
       
       return reply.send({
         success: true,
@@ -86,6 +89,8 @@ export const getWishlist = async (request: FastifyRequest, reply: FastifyReply) 
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     const userId = user.id;
+    // Cast userId string to ObjectId for all DB queries
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const query = request.query as { page?: string; limit?: string };
     const page = Math.max(1, Number(query.page || 1));
@@ -93,12 +98,12 @@ export const getWishlist = async (request: FastifyRequest, reply: FastifyReply) 
     const skip = (page - 1) * limit;
 
     const [wishlistItems, total] = await Promise.all([
-      UserWishlistModel.find({ userId })
+      UserWishlistModel.find({ userId: userObjectId })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      UserWishlistModel.countDocuments({ userId }),
+      UserWishlistModel.countDocuments({ userId: userObjectId }),
     ]);
 
     // Fetch actual content for the wishlist items

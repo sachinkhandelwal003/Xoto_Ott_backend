@@ -19,9 +19,11 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     const userId = userPayload.id;
+    // Cast userId string to ObjectId for all DB queries
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
     // Check user subscription status
-    const user = await UserModel.findById(userId).select('subscriptionStatus subscriptionExpiry').lean();
+    const user = await UserModel.findById(userObjectId).select('subscriptionStatus subscriptionExpiry').lean();
     if (!user) {
       return reply.status(404).send({ success: false, message: 'User not found' });
     }
@@ -82,9 +84,9 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
 
       // Upsert download record
       downloadDoc = await UserDownloadModel.findOneAndUpdate(
-        { userId, contentId, episodeId: null },
-        { contentModelType },
-        { upsert: true, new: true }
+        { userId: userObjectId, contentId, episodeId: null },
+        { $setOnInsert: { contentModelType } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     } else {
       // It's a show/drama series episode
@@ -129,9 +131,9 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
 
       // Upsert download record
       downloadDoc = await UserDownloadModel.findOneAndUpdate(
-        { userId, contentId, episodeId },
-        { contentModelType },
-        { upsert: true, new: true }
+        { userId: userObjectId, contentId, episodeId },
+        { $setOnInsert: { contentModelType } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     }
 
@@ -164,6 +166,8 @@ export const getDownloadsList = async (request: FastifyRequest, reply: FastifyRe
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     const userId = userPayload.id;
+    // Cast userId string to ObjectId for all DB queries
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const query = request.query as { page?: string; limit?: string };
     const page = Math.max(1, Number(query.page || 1));
@@ -171,12 +175,12 @@ export const getDownloadsList = async (request: FastifyRequest, reply: FastifyRe
     const skip = (page - 1) * limit;
 
     const [downloads, total] = await Promise.all([
-      UserDownloadModel.find({ userId })
+      UserDownloadModel.find({ userId: userObjectId })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      UserDownloadModel.countDocuments({ userId })
+      UserDownloadModel.countDocuments({ userId: userObjectId })
     ]);
 
     const movieIds = downloads.filter(d => d.contentModelType === 'Movie').map(d => d.contentId);
@@ -253,6 +257,8 @@ export const removeDownload = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     const userId = userPayload.id;
+    // Cast userId string to ObjectId for all DB queries
+    const userObjectId = new mongoose.Types.ObjectId(userId);
     const { id } = request.params as { id: string };
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -261,9 +267,9 @@ export const removeDownload = async (request: FastifyRequest, reply: FastifyRepl
 
     // Try deleting by download log _id first, then by contentId as fallback
     // (some mobile clients send contentId instead of the log _id)
-    let download = await UserDownloadModel.findOneAndDelete({ _id: id, userId });
+    let download = await UserDownloadModel.findOneAndDelete({ _id: id, userId: userObjectId });
     if (!download) {
-      download = await UserDownloadModel.findOneAndDelete({ contentId: id, userId });
+      download = await UserDownloadModel.findOneAndDelete({ contentId: id, userId: userObjectId });
     }
     if (!download) {
       return reply.status(404).send({ success: false, message: 'Download not found or already removed' });

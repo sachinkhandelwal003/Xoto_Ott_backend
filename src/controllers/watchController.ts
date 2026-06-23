@@ -4,6 +4,8 @@ import { ContentModel } from '../models/Content';
 import { MovieModel } from '../models/Movie';
 import { EpisodeModel } from '../models/Episode';
 import { UserLikeModel } from '../models/UserLike';
+import { UserWishlistModel } from '../models/UserWishlist';
+import { UserDownloadModel } from '../models/UserDownload';
 import { UserModel } from '../models/User';
 import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import '../models/Actor';
@@ -90,12 +92,15 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     const userId = userInfo?.userId || null;
     const userPlan = userInfo?.userPlan || 'free';
 
+    // Cast userId to ObjectId once for ALL DB lookups
+    const userObjectId = userId ? new mongoose.Types.ObjectId(userId) : null;
+
     let requestedSeason = query.season ? Math.max(1, Number(query.season)) : null;
     let requestedEpisode = query.episode ? Math.max(1, Number(query.episode)) : null;
 
     // Default to last watched episode if user is logged in and query is not specified
-    if (userId && (requestedSeason === null || requestedEpisode === null)) {
-      const lastProgress = await UserWatchProgressModel.findOne({ userId, contentId })
+    if (userObjectId && (requestedSeason === null || requestedEpisode === null)) {
+      const lastProgress = await UserWatchProgressModel.findOne({ userId: userObjectId, contentId })
         .sort({ lastWatchedAt: -1 })
         .populate('episodeId')
         .lean();
@@ -132,13 +137,20 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
 
     const contentPlan = content.planRequired || 'free';
 
-    // ── 3. Handle Like Status ─────────────────────────────────────────────────
-    // Series/movie-level like: episodeId must be null (not episode-scoped)
+    // ── 3. Handle Like / Wishlist / Download Status ───────────────────────
     let isLikedByUser = false;
+    let isWishlisted = false;
+    let isDownloaded = false;
     let likedEpisodeIdSet = new Set<string>();
-    if (userId) {
-      const liked = await UserLikeModel.findOne({ userId, contentId: content._id, episodeId: null }).lean();
-      isLikedByUser = !!liked;
+    if (userObjectId) {
+      const [likeDoc, wishlistDoc, downloadDoc] = await Promise.all([
+        UserLikeModel.findOne({ userId: userObjectId, contentId: content._id, episodeId: null }).lean(),
+        UserWishlistModel.findOne({ userId: userObjectId, contentId: content._id }).lean(),
+        UserDownloadModel.findOne({ userId: userObjectId, contentId: content._id }).lean(),
+      ]);
+      isLikedByUser = !!likeDoc;
+      isWishlisted = !!wishlistDoc;
+      isDownloaded = !!downloadDoc;
     }
 
     // ── 4. Map Cast & Crew ────────────────────────────────────────────────────
@@ -195,8 +207,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
       const isAccessible = canAccessItem(contentPlan === 'free', contentPlan !== 'free', contentPlan, userPlan);
       
       let watchProgress = null;
-      if (userId) {
-        const progressDoc = await UserWatchProgressModel.findOne({ userId, contentId: content._id, episodeId: null }).lean();
+      if (userObjectId) {
+        const progressDoc = await UserWatchProgressModel.findOne({ userId: userObjectId, contentId: content._id, episodeId: null }).lean();
         if (progressDoc) {
           watchProgress = {
             progressSeconds: progressDoc.progressSeconds,
@@ -232,10 +244,10 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
       const allEpisodes = await EpisodeModel.find({ contentId: content._id }).sort({ season: 1, episode: 1 }).lean();
 
       // Fetch which episodes the user has liked (episode-level likes)
-      if (userId && allEpisodes.length > 0) {
+      if (userObjectId && allEpisodes.length > 0) {
         const episodeIds = allEpisodes.map(ep => ep._id);
         const episodeLikes = await UserLikeModel.find({
-          userId,
+          userId: userObjectId,
           contentId: content._id,
           episodeId: { $in: episodeIds },
         }).select('episodeId').lean();
@@ -290,9 +302,9 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         }
 
         let watchProgress = null;
-        if (userId) {
+        if (userObjectId) {
           const progressDoc = await UserWatchProgressModel.findOne({
-            userId,
+            userId: userObjectId,
             contentId: content._id,
             episodeId: currentEpisodeRaw._id,
           }).lean();
@@ -337,6 +349,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
           views: content.views || 0,
           likeCount: content.likes || 0,
           isLikedByUser,
+          isWishlisted,
+          isDownloaded,
           shareUrl: buildShareUrl(content._id.toString()),
           
           cast,

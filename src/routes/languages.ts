@@ -9,10 +9,10 @@ import {
 } from '../controllers/languageController';
 
 const languages: FastifyPluginAsync = async (fastify) => {
-  // Get all languages (for users)
-  fastify.get('/', { onRequest: [requirePermission('languages', 'canView')] }, listLanguages);
-  // Get single language
-  fastify.get('/:id', { onRequest: [requirePermission('languages', 'canView')] }, getLanguage);
+  // Get all languages — PUBLIC (called by mobile app for language selection screen)
+  fastify.get('/', listLanguages);
+  // Get single language — PUBLIC
+  fastify.get('/:id', getLanguage);
   // Create language (admin only)
   fastify.post('/', { onRequest: [requirePermission('languages', 'canCreate')] }, createLanguage);
   // Update language (admin only)

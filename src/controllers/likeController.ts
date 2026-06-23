@@ -48,9 +48,11 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
   try {
     // ── 1. Verify JWT (required) ─────────────────────────────────────────────
     let userId: string;
+    let userObjectId: mongoose.Types.ObjectId;
     try {
       await request.jwtVerify();
       userId = (request.user as any).id;
+      userObjectId = new mongoose.Types.ObjectId(userId);
     } catch {
       return reply.status(401).send({
         success: false,
@@ -113,8 +115,8 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
     // Each (userId, contentId, episodeId) triple is unique — so episode likes
     // are fully isolated from each other and from the series-level like.
     const likeQuery = episodeId
-      ? { userId, contentId, episodeId }
-      : { userId, contentId, episodeId: null };
+      ? { userId: userObjectId, contentId, episodeId }
+      : { userId: userObjectId, contentId, episodeId: null };
 
     const existingLike = await UserLikeModel.findOne(likeQuery);
 
@@ -144,7 +146,7 @@ export const toggleLike = async (request: FastifyRequest, reply: FastifyReply) =
       });
     } else {
       // Not liked → LIKE
-      await UserLikeModel.create({ userId, contentId, episodeId: episodeId || null, contentModelType });
+      await UserLikeModel.create({ userId: userObjectId, contentId, episodeId: episodeId || null, contentModelType });
 
       let likeCount = 0;
       if (episodeId) {
