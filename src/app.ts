@@ -16,6 +16,23 @@ const fastify = Fastify({
   bodyLimit: 2000 * 1024 * 1024 // 2GB
 });
 
+// ── JSON body parser (MUST be registered BEFORE multipart) ───────────────────
+// @fastify/multipart intercepts ALL POST/PUT body streams globally.
+// Without this explicit parser, JSON bodies on non-upload routes are left
+// undefined, causing "Cannot destructure property of request.body" errors.
+fastify.addContentTypeParser(
+  'application/json',
+  { parseAs: 'string' },
+  (req, body, done) => {
+    try {
+      done(null, body ? JSON.parse(body as string) : {});
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  }
+);
+
 // Enable compression for faster responses
 fastify.register(fastifyCompress, {
   global: false,

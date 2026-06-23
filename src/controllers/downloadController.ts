@@ -36,11 +36,12 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       });
     }
 
-    const { contentId, contentType, episodeId } = request.body as {
-      contentId: string;
-      contentType: 'movie' | 'drama' | 'series';
+    const body = (request.body || {}) as {
+      contentId?: string;
+      contentType?: 'movie' | 'drama' | 'series';
       episodeId?: string;
     };
+    const { contentId, contentType, episodeId } = body;
 
     if (!contentId || !contentType) {
       return reply.status(400).send({ success: false, message: 'contentId and contentType are required' });

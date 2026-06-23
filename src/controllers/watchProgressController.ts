@@ -13,12 +13,13 @@ export const saveWatchProgress = async (request: FastifyRequest, reply: FastifyR
       return reply.status(401).send({ success: false, message: 'Unauthorized.' });
     }
 
-    const { contentId, episodeId, progressSeconds, durationSeconds } = request.body as {
-      contentId: string;
+    const body = (request.body || {}) as {
+      contentId?: string;
       episodeId?: string;
-      progressSeconds: number;
-      durationSeconds: number;
+      progressSeconds?: number;
+      durationSeconds?: number;
     };
+    const { contentId, episodeId, progressSeconds, durationSeconds } = body;
 
     if (!contentId || progressSeconds === undefined || durationSeconds === undefined) {
       return reply.status(400).send({ success: false, message: 'contentId, progressSeconds, and durationSeconds are required.' });

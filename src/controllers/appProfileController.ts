@@ -386,9 +386,9 @@ export const updateVideoQuality = async (request: FastifyRequest, reply: Fastify
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
 
-    const { videoQuality } = request.body as { videoQuality: 'auto' | 'best' | 'data_saver' };
+    const { videoQuality } = (request.body || {}) as { videoQuality?: 'auto' | 'best' | 'data_saver' };
     
-    if (!['auto', 'best', 'data_saver'].includes(videoQuality)) {
+    if (!videoQuality || !['auto', 'best', 'data_saver'].includes(videoQuality)) {
       return reply.status(400).send({ success: false, message: 'Invalid video quality setting' });
     }
 
@@ -413,7 +413,7 @@ export const updatePreferredLanguage = async (request: FastifyRequest, reply: Fa
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
 
-    const { language } = request.body as { language: string };
+    const { language } = (request.body || {}) as { language?: string };
     if (!language || typeof language !== 'string') {
       return reply.status(400).send({ success: false, message: 'Language is required' });
     }
