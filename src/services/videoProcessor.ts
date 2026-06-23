@@ -1,0 +1,99 @@
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import { Types } from 'mongoose';
+import { MovieModel } from '../models/Movie';
+
+const runCommand = (command: string, args: string[]): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args);
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout.trim());
+      } else {
+        reject(new Error(stderr.trim() || `${command} exited with code ${code}`));
+      }
+    });
+  });
+};
+
+const ensureDir = (dir: string) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
+
+const toLocalUploadPath = (urlPath: string): string | null => {
+  if (!urlPath) return null;
+  const uploadsRoot = path.join(process.cwd(), 'uploads');
+  if (urlPath.startsWith('/uploads/')) {
+    const relPath = urlPath.replace('/uploads/', '');
+    return path.join(uploadsRoot, relPath);
+  }
+  return null;
+};
+
+export const processMovieHls = async (movieId: Types.ObjectId | string, sourceVideoUrl: string) => {
+  try {
+    const movie = await MovieModel.findById(movieId).lean();
+    if (!movie) return;
+
+    const sourceVideoPath = toLocalUploadPath(sourceVideoUrl);
+    if (!sourceVideoPath || !fs.existsSync(sourceVideoPath)) {
+      await MovieModel.findByIdAndUpdate(movieId, {
+        processingStatus: 'failed',
+        processingError: 'Source video not found on disk: ' + sourceVideoPath,
+      });
+      return;
+    }
+
+    const uploadsRoot = path.join(process.cwd(), 'uploads');
+    const hlsFolder = path.join(uploadsRoot, 'hls', 'movies', movieId.toString());
+    ensureDir(hlsFolder);
+
+    const outputPattern = path.join(hlsFolder, 'segment_%03d.ts');
+    const playlistPath = path.join(hlsFolder, 'playlist.m3u8');
+    ensureDir(path.dirname(outputPattern));
+
+    // Full movie conversion
+    await runCommand('ffmpeg', [
+      '-i', sourceVideoPath,
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-f', 'hls',
+      '-hls_time', '10',
+      '-hls_playlist_type', 'vod',
+      '-hls_segment_filename', outputPattern,
+      playlistPath
+    ]);
+
+    await MovieModel.findByIdAndUpdate(movieId, {
+      hlsUrl: `/uploads/hls/movies/${movieId.toString()}/playlist.m3u8`,
+      status: 'published',
+      processingStatus: 'ready',
+      processingError: null,
+    });
+  } catch (error: any) {
+    console.error('Error processing movie HLS:', error);
+    await MovieModel.findByIdAndUpdate(movieId, {
+      processingStatus: 'failed',
+      processingError: error.message,
+    });
+  }
+};
+
+export const processMovieInBackground = (movieId: Types.ObjectId | string, sourceVideoUrl: string) => {
+  setImmediate(async () => {
+    await processMovieHls(movieId, sourceVideoUrl);
+  });
+};

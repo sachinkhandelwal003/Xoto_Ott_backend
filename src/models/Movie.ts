@@ -22,6 +22,8 @@ export interface IMovie extends Document {
   duration?: number;
   releaseDate?: Date;
   status: 'published' | 'draft' | 'processing' | 'moderation' | 'rejected';
+  processingStatus?: 'queued' | 'processing' | 'ready' | 'failed';
+  processingError?: string;
   rejectionReason?: string;
   approvedBy?: mongoose.Types.ObjectId;
   approvedAt?: Date;
@@ -92,6 +94,11 @@ const MovieSchema = new Schema<IMovie>(
       default: 'draft',
       index: true,
     },
+    processingStatus: {
+      type: String,
+      enum: ['queued', 'processing', 'ready', 'failed'],
+    },
+    processingError: String,
     rejectionReason: String,
     approvedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },
     approvedAt: Date,

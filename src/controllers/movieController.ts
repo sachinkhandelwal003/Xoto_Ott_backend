@@ -129,8 +129,20 @@ export const createMovie = async (request: FastifyRequest, reply: FastifyReply) 
   try {
     const body = request.body as any;
 
+    // Check if the uploaded video is a raw MP4 or local media file
+    const isRawLocalVideo = body.hlsUrl && body.hlsUrl.startsWith('/uploads/') && !body.hlsUrl.endsWith('.m3u8');
+    if (isRawLocalVideo) {
+      body.processingStatus = 'queued';
+    }
+
     const movie = await MovieModel.create(body);
     await syncSections(movie._id.toString(), body.sections);
+
+    if (isRawLocalVideo) {
+      import('../services/videoProcessor').then(({ processMovieInBackground }) => {
+        processMovieInBackground(movie._id, body.hlsUrl);
+      });
+    }
 
     return reply.status(201).send({
       success: true,
@@ -145,17 +157,38 @@ export const createMovie = async (request: FastifyRequest, reply: FastifyReply) 
   }
 };
 
-// Update movie by ID
+// Update movie
 export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { id } = request.params as { id: string };
     const body = request.body as any;
 
+    const existingMovie = await MovieModel.findById(id).lean();
+    if (!existingMovie) {
+      return reply.status(404).send({ success: false, error: 'Movie not found' });
+    }
+
+    // Check if the hlsUrl has changed to a new raw MP4
+    const isRawLocalVideo = body.hlsUrl && body.hlsUrl.startsWith('/uploads/') && !body.hlsUrl.endsWith('.m3u8') && body.hlsUrl !== (existingMovie as any).hlsUrl;
+    if (isRawLocalVideo) {
+      body.processingStatus = 'queued';
+    }
+
     const movie = await MovieModel.findByIdAndUpdate(
       id,
       { $set: body },
       { new: true, runValidators: true }
-    )
+    );
+
+    await syncSections(id, body.sections);
+
+    if (isRawLocalVideo && movie) {
+      import('../services/videoProcessor').then(({ processMovieInBackground }) => {
+        processMovieInBackground(movie._id, body.hlsUrl);
+      });
+    }
+
+    const updatedMovie = await MovieModel.findById(id)
       .populate('genres', 'name image')
       .populate('categories', 'name thumbnail')
       .populate('languages', 'name')
