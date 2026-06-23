@@ -12,6 +12,14 @@ const formatSizeMB = (sizeBytes: number): string => {
   return sizeBytes ? `${Math.round(sizeBytes / (1024 * 1024))} MB` : 'N/A';
 };
 
+// Helper to convert relative URLs to absolute URLs
+const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseUrl = `${request.protocol}://${request.hostname}`;
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export const requestDownload = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const userPayload = (request as any).user;
@@ -51,7 +59,7 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(400).send({ success: false, message: 'Invalid contentId' });
     }
 
-    let downloadUrl = '';
+    let downloadUrl: string | null = '';
     let qualities: any[] = [];
     let title = '';
     let parentTitle = '';
@@ -71,15 +79,15 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
       }
 
       title = movie.title;
-      thumbnail = movie.thumbnail || '';
+      thumbnail = toAbsoluteUrl(request, movie.thumbnail || '') || '';
       duration = movie.duration || 0;
-      downloadUrl = movie.hlsUrl || '';
+      downloadUrl = toAbsoluteUrl(request, movie.hlsUrl || '');
       qualities = (movie.videoQualities || []).map((q: any) => ({
         quality: q.quality,
         label: q.quality.toUpperCase(),
         size: q.size,
         sizeFormatted: formatSizeMB(q.size),
-        url: q.url
+        url: toAbsoluteUrl(request, q.url)
       }));
       contentModelType = 'Movie';
 
@@ -118,15 +126,15 @@ export const requestDownload = async (request: FastifyRequest, reply: FastifyRep
 
       title = episode.title;
       parentTitle = drama.title;
-      thumbnail = episode.thumbnail || drama.thumbnail || '';
+      thumbnail = toAbsoluteUrl(request, episode.thumbnail || drama.thumbnail || '') || '';
       duration = episode.duration || 0;
-      downloadUrl = episode.hlsUrl || '';
+      downloadUrl = toAbsoluteUrl(request, episode.hlsUrl || '');
       qualities = (episode.videoQualities || []).map((q: any) => ({
         quality: q.quality,
         label: q.quality.toUpperCase(),
         size: q.size,
         sizeFormatted: formatSizeMB(q.size),
-        url: q.url
+        url: toAbsoluteUrl(request, q.url)
       }));
       contentModelType = 'Content';
 

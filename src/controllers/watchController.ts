@@ -51,17 +51,25 @@ const canAccessItem = (isFree: boolean, isLocked: boolean, contentPlanRequired: 
   return true;
 };
 
+// Helper to convert relative URLs to absolute URLs
+const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const baseUrl = `${request.protocol}://${request.hostname}`;
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 // Build standard Video Settings array from hlsUrl and per-item videoQualities.
 // Each quality tier falls back to hlsUrl (the item's own adaptive stream) so
 // Data Saver mode always plays the correct video, never a mismatched source.
-const buildVideoSettings = (hlsUrl: string | null, qualities: any[] = []) => {
-  const autoUrl = hlsUrl || null;
+const buildVideoSettings = (request: FastifyRequest, hlsUrl: string | null, qualities: any[] = []) => {
+  const autoUrl = toAbsoluteUrl(request, hlsUrl) || null;
 
   // Best quality: prefer 1080p → 720p → 480p → hlsUrl (never null when hlsUrl exists)
   const bestUrl =
-    qualities.find((q: any) => q.quality === '1080p')?.url ||
-    qualities.find((q: any) => q.quality === '720p')?.url ||
-    qualities.find((q: any) => q.quality === '480p')?.url ||
+    toAbsoluteUrl(request, qualities.find((q: any) => q.quality === '1080p')?.url) ||
+    toAbsoluteUrl(request, qualities.find((q: any) => q.quality === '720p')?.url) ||
+    toAbsoluteUrl(request, qualities.find((q: any) => q.quality === '480p')?.url) ||
     autoUrl;
 
   // Data saver: prefer 360p → 144p → hlsUrl (same source, adaptive stream)
@@ -225,9 +233,9 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         duration: content.duration || null,
         isFree: contentPlan === 'free',
         isLocked: !isAccessible,
-        hlsUrl: isAccessible ? content.hlsUrl || null : null,
-        trailerUrl: content.trailerUrl || null,
-        videoSettings: isAccessible ? buildVideoSettings(content.hlsUrl, content.videoQualities) : null,
+        hlsUrl: isAccessible ? toAbsoluteUrl(request, content.hlsUrl) : null,
+        trailerUrl: toAbsoluteUrl(request, content.trailerUrl),
+        videoSettings: isAccessible ? buildVideoSettings(request, content.hlsUrl, content.videoQualities) : null,
         watchProgress,
       };
 
@@ -276,8 +284,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
           duration: ep.duration || null,
           isFree: ep.isFree,
           isLocked: !accessible,
-          hlsUrl: accessible ? ep.hlsUrl || null : null,
-          trailerUrl: ep.trailerUrl || null,
+          hlsUrl: accessible ? toAbsoluteUrl(request, ep.hlsUrl) : null,
+          trailerUrl: toAbsoluteUrl(request, ep.trailerUrl),
           likeCount: ep.likes || 0,
           isLikedByUser: likedEpisodeIdSet.has(ep._id.toString()),
         };
@@ -294,6 +302,7 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         currentEpisode = mapEpisode(currentEpisodeRaw);
         if (!currentEpisode.isLocked) {
           currentEpisode.videoSettings = buildVideoSettings(
+            request,
             currentEpisodeRaw.hlsUrl,
             currentEpisodeRaw.videoQualities || []
           );
