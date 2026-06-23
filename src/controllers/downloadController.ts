@@ -12,12 +12,17 @@ const formatSizeMB = (sizeBytes: number): string => {
   return sizeBytes ? `${Math.round(sizeBytes / (1024 * 1024))} MB` : 'N/A';
 };
 
-// Helper to convert relative URLs to absolute URLs
 const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  
+  let relPath = url;
+  if (!relPath.startsWith('/uploads/')) {
+    relPath = relPath.startsWith('uploads/') ? `/${relPath}` : `/uploads/${relPath.startsWith('/') ? relPath.slice(1) : relPath}`;
+  }
+  
   const baseUrl = `${request.protocol}://${request.hostname}`;
-  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${baseUrl}${relPath}`;
 };
 
 export const requestDownload = async (request: FastifyRequest, reply: FastifyReply) => {

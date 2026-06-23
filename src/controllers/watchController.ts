@@ -55,8 +55,14 @@ const canAccessItem = (isFree: boolean, isLocked: boolean, contentPlanRequired: 
 const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  
+  let relPath = url;
+  if (!relPath.startsWith('/uploads/')) {
+    relPath = relPath.startsWith('uploads/') ? `/${relPath}` : `/uploads/${relPath.startsWith('/') ? relPath.slice(1) : relPath}`;
+  }
+  
   const baseUrl = `${request.protocol}://${request.hostname}`;
-  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${baseUrl}${relPath}`;
 };
 
 // Build standard Video Settings array from hlsUrl and per-item videoQualities.
@@ -125,12 +131,13 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
     if (requestedEpisode === null) requestedEpisode = 1;
 
     // ── 1. Check if Series/Drama ──────────────────────────────────────────────
-    let content: any = await ContentModel.findById(contentId).lean();
+    let content: any = await ContentModel.findById(contentId).populate('genres', 'name').lean();
     let isMovieType = false;
 
     // ── 2. If not found, check Movie ──────────────────────────────────────────
     if (!content) {
       content = await MovieModel.findById(contentId)
+        .populate('genres', 'name')
         .populate('cast.actor', 'name image')
         .populate('crew.director', 'name image')
         .lean();
@@ -242,7 +249,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
       const hours = content.duration ? Math.floor(content.duration / 3600) : 0;
       const minutes = content.duration ? Math.floor((content.duration % 3600) / 60) : 0;
       const durationStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-      episodeMeta = `HD • ${(content.genres || []).join(', ')} • ${durationStr}`;
+      const genresText = (content.genres || []).map((g: any) => g.name || g).join(', ');
+      episodeMeta = `HD • ${genresText} • ${durationStr}`;
       
       totalSeasons = 0;
       totalEpisodes = 1;
@@ -272,7 +280,8 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
 
       totalEpisodes = allEpisodes.length;
       totalSeasons = seasonMap.size;
-      episodeMeta = `${requestedEpisode} of ${totalEpisodes} Episodes • Season ${requestedSeason} • ${(content.genres || []).join(', ')}`;
+      const genresText = (content.genres || []).map((g: any) => g.name || g).join(', ');
+      episodeMeta = `${requestedEpisode} of ${totalEpisodes} Episodes • Season ${requestedSeason} • ${genresText}`;
 
       const mapEpisode = (ep: any) => {
         const accessible = canAccessItem(ep.isFree, ep.isLocked || contentPlan !== 'free', contentPlan, userPlan);

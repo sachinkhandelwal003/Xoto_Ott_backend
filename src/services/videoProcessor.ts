@@ -36,11 +36,15 @@ const ensureDir = (dir: string) => {
 const toLocalUploadPath = (urlPath: string): string | null => {
   if (!urlPath) return null;
   const uploadsRoot = path.join(process.cwd(), 'uploads');
-  if (urlPath.startsWith('/uploads/')) {
-    const relPath = urlPath.replace('/uploads/', '');
-    return path.join(uploadsRoot, relPath);
+  let relPath = urlPath;
+  if (relPath.startsWith('/uploads/')) {
+    relPath = relPath.replace('/uploads/', '');
+  } else if (relPath.startsWith('uploads/')) {
+    relPath = relPath.replace('uploads/', '');
+  } else if (relPath.startsWith('/media/')) {
+    relPath = relPath.replace('/', '');
   }
-  return null;
+  return path.join(uploadsRoot, relPath);
 };
 
 export const processMovieHls = async (movieId: Types.ObjectId | string, sourceVideoUrl: string) => {

@@ -130,7 +130,8 @@ export const createMovie = async (request: FastifyRequest, reply: FastifyReply) 
     const body = request.body as any;
 
     // Check if the uploaded video is a raw MP4 or local media file
-    const isRawLocalVideo = body.hlsUrl && body.hlsUrl.startsWith('/uploads/') && !body.hlsUrl.endsWith('.m3u8');
+    const isLocalPath = body.hlsUrl && !body.hlsUrl.startsWith('http://') && !body.hlsUrl.startsWith('https://');
+    const isRawLocalVideo = isLocalPath && !body.hlsUrl.endsWith('.m3u8');
     if (isRawLocalVideo) {
       body.processingStatus = 'queued';
     }
@@ -169,7 +170,8 @@ export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) 
     }
 
     // Check if the hlsUrl has changed to a new raw MP4
-    const isRawLocalVideo = body.hlsUrl && body.hlsUrl.startsWith('/uploads/') && !body.hlsUrl.endsWith('.m3u8') && body.hlsUrl !== (existingMovie as any).hlsUrl;
+    const isLocalPath = body.hlsUrl && !body.hlsUrl.startsWith('http://') && !body.hlsUrl.startsWith('https://');
+    const isRawLocalVideo = isLocalPath && !body.hlsUrl.endsWith('.m3u8') && body.hlsUrl !== (existingMovie as any).hlsUrl;
     if (isRawLocalVideo) {
       body.processingStatus = 'queued';
     }
