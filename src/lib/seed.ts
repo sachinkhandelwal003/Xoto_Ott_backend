@@ -281,7 +281,10 @@ async function seedSampleContent() {
     },
   ];
 
-  const dramaContent = dramas.map((drama, index) => ({
+  const dramaContent = dramas.map((drama, index) => {
+    const staticId = `6a3387222e358a4c3dec${(0xda00 + index).toString(16).padStart(4, '0')}`;
+    return {
+    _id: new mongoose.Types.ObjectId(staticId),
     title: drama.title,
     type: 'series',
     contentType: 'drama',
@@ -323,9 +326,13 @@ async function seedSampleContent() {
     planRequired: drama.planRequired,
     createdAt: daysAgo(drama.daysOld),
     updatedAt: daysAgo(Math.max(0, drama.daysOld - 5)),
-  }));
+  };
+  });
 
-  const tvShowContent = tvShows.map((show, index) => ({
+  const tvShowContent = tvShows.map((show, index) => {
+    const staticId = `6a3387222e358a4c3dec${(0xdb00 + index).toString(16).padStart(4, '0')}`;
+    return {
+    _id: new mongoose.Types.ObjectId(staticId),
     title: show.title,
     type: 'series',
     contentType: 'series',
@@ -367,7 +374,8 @@ async function seedSampleContent() {
     planRequired: show.planRequired,
     createdAt: daysAgo(show.daysOld),
     updatedAt: daysAgo(Math.max(0, show.daysOld - 5)),
-  }));
+  };
+  });
 
   await ContentModel.insertMany([...dramaContent, ...tvShowContent]);
   logger.info('Seeded 3 short dramas and 3 TV shows');
@@ -499,13 +507,17 @@ async function seedEpisodes() {
 
   const episodes = [];
   
+  let epIndex = 0;
   for (const item of content) {
     const totalSeasons = item.seasons || 1;
     const episodesPerSeason = 5 + (item.title.length % 4); // 5-8 episodes per season
     
     for (let season = 1; season <= totalSeasons; season++) {
       for (let ep = 1; ep <= episodesPerSeason; ep++) {
+        const staticId = `6a3387222e358a4c3dec${(0xde00 + epIndex).toString(16).padStart(4, '0')}`;
+        epIndex++;
         episodes.push({
+          _id: new mongoose.Types.ObjectId(staticId),
           contentId: item._id,
           title: `${item.title} - S${season}E${ep}`,
           description: `Season ${season}, Episode ${ep} of ${item.title}. ${item.description}`,
@@ -544,6 +556,7 @@ async function seedBanners() {
 
   const banners = [
     {
+      _id: new mongoose.Types.ObjectId('6a3387222e358a4c3dec1111'),
       title: 'Welcome to Kotibox OTT',
       subtitle: 'Stream the best content',
       description: 'Watch thousands of shows and movies',
@@ -561,6 +574,7 @@ async function seedBanners() {
       textColor: '#ffffff',
     },
     {
+      _id: new mongoose.Types.ObjectId('6a3387222e358a4c3dec1112'),
       title: "CEO's Secret Wife",
       subtitle: 'New episodes every week',
       description: 'Watch the latest episodes',
@@ -576,6 +590,7 @@ async function seedBanners() {
       targetPlatforms: ['web', 'mobile', 'tv'],
     },
     {
+      _id: new mongoose.Types.ObjectId('6a3387222e358a4c3dec1113'),
       title: 'Revenge of the Heiress',
       subtitle: 'Now Streaming',
       description: 'Binge watch all episodes',
@@ -589,6 +604,7 @@ async function seedBanners() {
       targetPlatforms: ['web', 'mobile'],
     },
     {
+      _id: new mongoose.Types.ObjectId('6a3387222e358a4c3dec1114'),
       title: 'The Dark Knight Legacy',
       subtitle: 'StreamVault Original',
       description: 'Watch now',
@@ -603,6 +619,7 @@ async function seedBanners() {
       targetPlatforms: ['web', 'mobile', 'tv'],
     },
     {
+      _id: new mongoose.Types.ObjectId('6a3387222e358a4c3dec1115'),
       title: 'New Movies',
       subtitle: 'Check out latest releases',
       description: 'Fresh movies every month',
