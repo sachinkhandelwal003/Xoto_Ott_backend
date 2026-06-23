@@ -10,6 +10,20 @@ import { logger } from '../lib/logger';
 
 import { buildShareUrl } from '../lib/config';
 
+// Helper to convert relative URLs to absolute URLs
+const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  
+  let relPath = url;
+  if (!relPath.startsWith('/uploads/')) {
+    relPath = relPath.startsWith('uploads/') ? `/${relPath}` : `/uploads/${relPath.startsWith('/') ? relPath.slice(1) : relPath}`;
+  }
+  
+  const baseUrl = `${request.protocol}://${request.hostname}`;
+  return `${baseUrl}${relPath}`;
+};
+
 // Helper: extract optional userId from JWT without throwing
 const getOptionalUserId = (request: FastifyRequest): string | null => {
   try {
@@ -97,8 +111,8 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
       related = relatedMovies.map((r: any) => ({
         id: r._id.toString(),
         title: r.title,
-        thumbnail: r.thumbnail || null,
-        bannerImage: r.bannerImage || null,
+        thumbnail: toAbsoluteUrl(request, r.thumbnail) || null,
+        bannerImage: toAbsoluteUrl(request, r.bannerImage) || null,
         duration: r.duration || null,
         year: r.year || null,
         rating: r.rating || null,
@@ -111,7 +125,7 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
     const cast = (movie.cast || []).map((c: any) => ({
       id: c.actor?._id?.toString() || null,
       name: c.actor?.name || 'Unknown',
-      image: c.actor?.image || null,
+      image: toAbsoluteUrl(request, c.actor?.image) || null,
       designation: c.actor?.designation || null,
       role: c.role || 'Actor',
       character: c.character || null,
@@ -120,7 +134,7 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
     const crew = (movie.crew || []).map((c: any) => ({
       id: c.director?._id?.toString() || null,
       name: c.director?.name || 'Unknown',
-      image: c.director?.image || null,
+      image: toAbsoluteUrl(request, c.director?.image) || null,
       designation: c.director?.designation || null,
       role: c.role || 'Director',
     }));
@@ -138,14 +152,14 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
 
     const videoSettings = hlsUrl
       ? [
-          { key: 'auto', label: 'Auto', description: 'Adjusts quality automatically', url: hlsUrl },
+          { key: 'auto', label: 'Auto', description: 'Adjusts quality automatically', url: toAbsoluteUrl(request, hlsUrl) },
           ...qualities.map((q: any) => {
             const sizeMB = q.size ? `${Math.round(q.size / (1024 * 1024))} MB` : 'N/A';
             return {
               key: q.quality,
               label: q.quality === '4k' ? '4K' : q.quality.toUpperCase(),
               description: `${q.quality.toUpperCase()} quality option (${sizeMB})`,
-              url: q.url,
+              url: toAbsoluteUrl(request, q.url),
             };
           })
         ]
@@ -163,14 +177,14 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
         originalTitle: movie.originalTitle || null,
         description: movie.description || null,
         shortDescription: movie.shortDescription || null,
-        thumbnail: movie.thumbnail || null,
-        bannerImage: movie.bannerImage || null,
-        posterImage: movie.posterImage || null,
-        trailerUrl: movie.trailerUrl || null,
+        thumbnail: toAbsoluteUrl(request, movie.thumbnail) || null,
+        bannerImage: toAbsoluteUrl(request, movie.bannerImage) || null,
+        posterImage: toAbsoluteUrl(request, movie.posterImage) || null,
+        trailerUrl: toAbsoluteUrl(request, movie.trailerUrl) || null,
         type: 'movie',
 
         // Video
-        hlsUrl,
+        hlsUrl: toAbsoluteUrl(request, hlsUrl),
         videoSettings,
         playbackSpeeds: [
           { value: 0.75, label: '0.75x' },

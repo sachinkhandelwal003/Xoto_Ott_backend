@@ -29,8 +29,23 @@ const getOptionalUserId = (request: FastifyRequest): string | null => {
 
 import { buildShareUrl } from '../lib/config';
 
+// Helper to convert relative URLs to absolute URLs
+const toAbsoluteUrl = (request: FastifyRequest, url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  
+  let relPath = url;
+  if (!relPath.startsWith('/uploads/')) {
+    relPath = relPath.startsWith('uploads/') ? `/${relPath}` : `/uploads/${relPath.startsWith('/') ? relPath.slice(1) : relPath}`;
+  }
+  
+  const baseUrl = `${request.protocol}://${request.hostname}`;
+  return `${baseUrl}${relPath}`;
+};
+
 // Helper function to map content items for the explore / short-drama reel feed
 const mapContentItem = (
+  request: FastifyRequest,
   item: any,
   type: string,
   episodeCount = 0,
@@ -42,8 +57,8 @@ const mapContentItem = (
   title: item.title,
   description: item.description,
   shortDescription: item.shortDescription,
-  thumbnail: item.thumbnail,
-  bannerImage: item.bannerImage,
+  thumbnail: toAbsoluteUrl(request, item.thumbnail),
+  bannerImage: toAbsoluteUrl(request, item.bannerImage),
   type,
   episodeCount,
   genres: item.genres,
@@ -64,11 +79,11 @@ const mapContentItem = (
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
   // Preview — ONLY episode 1 (short-drama reel style, no full list)
-  videoUrl: firstEpisode?.hlsUrl || item.hlsUrl || null,
-  trailerUrl: firstEpisode?.trailerUrl || item.trailerUrl || null,
+  videoUrl: toAbsoluteUrl(request, firstEpisode?.hlsUrl || item.hlsUrl) || null,
+  trailerUrl: toAbsoluteUrl(request, firstEpisode?.trailerUrl || item.trailerUrl) || null,
   firstEpisodeId: firstEpisode?._id?.toString() || null,
   firstEpisodeTitle: firstEpisode?.title || null,
-  firstEpisodeThumbnail: firstEpisode?.thumbnail || item.thumbnail || null,
+  firstEpisodeThumbnail: toAbsoluteUrl(request, firstEpisode?.thumbnail || item.thumbnail) || null,
   firstEpisodeDuration: firstEpisode?.duration || null,
   firstEpisodeIsFree: firstEpisode?.isFree ?? null,
 });
@@ -285,11 +300,11 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
       const isLikedByUser: boolean = likedContentIdSet.has(cid);
 
       if (contentType === 'movie') {
-        return mapContentItem(content, 'movie', 0, undefined, likeCount, isLikedByUser);
+        return mapContentItem(request, content, 'movie', 0, undefined, likeCount, isLikedByUser);
       } else {
         const episodeCount = episodeCountMap.get(cid) || 0;
         const firstEpisode = firstEpisodeMap.get(cid);
-        return mapContentItem(content, content.type || 'series', episodeCount, firstEpisode, likeCount, isLikedByUser);
+        return mapContentItem(request, content, content.type || 'series', episodeCount, firstEpisode, likeCount, isLikedByUser);
       }
     });
 

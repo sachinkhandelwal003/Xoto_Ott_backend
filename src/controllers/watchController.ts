@@ -82,8 +82,8 @@ const buildVideoSettings = (request: FastifyRequest, hlsUrl: string | null, qual
   // IMPORTANT: do NOT fall through to bestUrl — that would play a different
   // resolution stream which may be audio-only or visually wrong.
   const dataSaverUrl =
-    qualities.find((q: any) => q.quality === '360p')?.url ||
-    qualities.find((q: any) => q.quality === '144p')?.url ||
+    toAbsoluteUrl(request, qualities.find((q: any) => q.quality === '360p')?.url) ||
+    toAbsoluteUrl(request, qualities.find((q: any) => q.quality === '144p')?.url) ||
     autoUrl; // fall back to the adaptive HLS stream, NOT to a higher-res MP4
 
   return [
