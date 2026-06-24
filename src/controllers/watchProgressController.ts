@@ -190,11 +190,18 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
         ? (h.episodeId.hlsUrl || h.episodeId.sourceVideoUrl || '') 
         : (h.contentId.hlsUrl || h.contentId.videoUrl || '');
       
+      // Determine type
+      let type = 'movie';
+      if (h.contentModelType === 'Content') {
+        type = h.contentId.contentType || (h.contentId.type === 'series' ? 'series' : 'drama');
+      }
+      
       return {
         id: h._id.toString(),
         contentId: h.contentId?._id?.toString(),
         episodeId: h.episodeId?._id?.toString() || null,
         contentType: h.contentModelType.toLowerCase(),
+        type,
         title: h.episodeId ? h.episodeId.title : h.contentId.title,
         showTitle: h.episodeId ? h.contentId.title : null,
         thumbnail: h.episodeId?.thumbnail || h.contentId.thumbnail || h.contentId.posterImage,
