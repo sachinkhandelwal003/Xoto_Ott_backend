@@ -47,9 +47,9 @@ const mapContentItem = (
   bannerImage: item.bannerImage,
   type,
   episodeCount,
-  genres: item.genres,
-  genresText: item.genres?.join(' & ') || '',
-  languages: item.languages,
+  genres: (item.genres || []).map((g: any) => g.name || g),
+  genresText: (item.genres || []).map((g: any) => g.name || g).join(' & '),
+  languages: (item.languages || []).map((l: any) => l.name || l),
   views: item.views || 0,
   likeCount,
   isLikedByUser,
@@ -179,7 +179,13 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
         { $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }] },
       ],
     })
-      .populate('contentId')
+      .populate({
+        path: 'contentId',
+        populate: [
+          { path: 'languages', select: 'name' },
+          { path: 'genres', select: 'name' }
+        ]
+      })
       .sort({ position: 1, createdAt: -1 })
       .limit(limit)
       .lean();
@@ -216,6 +222,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
           content = await ContentModel.find(filter)
             .sort(section.sortBy)
             .limit(section.limit)
+            .populate('languages', 'name')
+            .populate('genres', 'name')
             .lean();
         }
 
@@ -227,6 +235,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
             content = await ContentModel.find(fallbackFilter)
               .sort(section.sortBy)
               .limit(section.limit)
+              .populate('languages', 'name')
+              .populate('genres', 'name')
               .lean();
           }
         }
@@ -241,6 +251,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
           content = await MovieModel.find(filter)
             .sort(section.sortBy)
             .limit(section.limit)
+            .populate('languages', 'name')
+            .populate('genres', 'name')
             .lean();
         }
 
@@ -252,6 +264,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
             content = await MovieModel.find(fallbackFilter)
               .sort(section.sortBy)
               .limit(section.limit)
+              .populate('languages', 'name')
+              .populate('genres', 'name')
               .lean();
           }
         }

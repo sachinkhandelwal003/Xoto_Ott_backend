@@ -97,7 +97,7 @@ export const getWebHome = async (request: FastifyRequest, reply: FastifyReply) =
         : Promise.resolve([]),
       // 8: Drama Shows
       dramaGenre 
-        ? ContentModel.find({ status: 'published', type: 'series', contentType: 'series', genres: { $regex: /drama/i } }).sort({ views: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean() 
+        ? ContentModel.find({ status: 'published', type: 'series', contentType: 'series', genres: dramaGenre._id }).sort({ views: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean() 
         : Promise.resolve([])
     ];
 

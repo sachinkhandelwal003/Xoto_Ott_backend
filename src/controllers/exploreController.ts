@@ -61,9 +61,9 @@ const mapContentItem = (
   bannerImage: toAbsoluteUrl(request, item.bannerImage),
   type,
   episodeCount,
-  genres: item.genres,
-  genresText: item.genres.join(' & '),
-  languages: item.languages,
+  genres: (item.genres || []).map((g: any) => g.name || g),
+  genresText: (item.genres || []).map((g: any) => g.name || g).join(' & '),
+  languages: (item.languages || []).map((l: any) => l.name || l),
   views: item.views || 0,
   likeCount,
   isLikedByUser,
@@ -179,6 +179,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         .sort(sortBy)
         .skip(offset)
         .limit(fetchLimit)
+        .populate('languages', 'name')
+        .populate('genres', 'name')
         .lean();
 
       // Fallback if no matching language content
@@ -187,6 +189,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
           .sort(sortBy)
           .skip(offset)
           .limit(fetchLimit)
+          .populate('languages', 'name')
+          .populate('genres', 'name')
           .lean();
       }
     } else {
@@ -198,6 +202,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         .sort(sortBy)
         .skip(offset)
         .limit(fetchLimit)
+        .populate('languages', 'name')
+        .populate('genres', 'name')
         .lean();
 
       // Fallback if no matching language content
@@ -206,6 +212,8 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
           .sort(sortBy)
           .skip(offset)
           .limit(fetchLimit)
+          .populate('languages', 'name')
+          .populate('genres', 'name')
           .lean();
       }
     }
