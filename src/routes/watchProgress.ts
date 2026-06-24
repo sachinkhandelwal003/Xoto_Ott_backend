@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { saveWatchProgress, clearWatchProgress, getWatchHistory, deleteWatchHistoryItem } from '../controllers/watchProgressController';
+import { saveWatchProgress, clearWatchProgress, getWatchHistory, deleteWatchHistoryItem, clearAllWatchHistory } from '../controllers/watchProgressController';
 
 const watchProgressRoutes: FastifyPluginAsync = async (fastify) => {
   // Requires authentication
@@ -19,6 +19,9 @@ const watchProgressRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/app/watch/history - Get full watch history for the user
   fastify.get('/watch/history', getWatchHistory);
+
+  // DELETE /api/app/watch/history/all - Clear all watch history
+  fastify.delete('/watch/history/all', clearAllWatchHistory);
 
   // DELETE /api/app/watch/history/:id - Delete a specific item from watch history
   fastify.delete('/watch/history/:id', deleteWatchHistoryItem);

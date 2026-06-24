@@ -159,8 +159,8 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
       .sort({ lastWatchedAt: -1 })
       .skip(skip)
       .limit(Number(limit))
-      .populate('contentId', 'title thumbnail posterImage type badge duration') // for movies/shows
-      .populate('episodeId', 'title thumbnail episode season duration')
+      .populate('contentId', 'title thumbnail posterImage type badge duration planRequired status hlsUrl videoUrl') // for movies/shows
+      .populate('episodeId', 'title thumbnail episode season duration isFree hlsUrl sourceVideoUrl processingStatus')
       .lean();
 
     const total = await UserWatchProgressModel.countDocuments({ userId: new mongoose.Types.ObjectId(userId) });
@@ -169,6 +169,26 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
     const items = history.map((h: any) => {
       // Avoid breaking if content was deleted
       if (!h.contentId) return null;
+
+      // Determine planRequired
+      let planRequired: 'free' | 'premium' | 'basic' | 'standard' = 'free';
+      if (h.episodeId) {
+        planRequired = h.episodeId.isFree ? 'free' : 'premium';
+      } else if (h.contentId.planRequired) {
+        planRequired = h.contentId.planRequired;
+      }
+
+      // Determine isAvailable & status
+      const status = h.contentId.status || 'draft';
+      let isAvailable = status === 'published';
+      if (h.episodeId && h.episodeId.processingStatus !== 'ready') {
+        isAvailable = false;
+      }
+
+      // Determine hlsUrl / videoUrl
+      const hlsUrl = h.episodeId 
+        ? (h.episodeId.hlsUrl || h.episodeId.sourceVideoUrl || '') 
+        : (h.contentId.hlsUrl || h.contentId.videoUrl || '');
       
       return {
         id: h._id.toString(),
@@ -185,6 +205,10 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
         durationSeconds: h.durationSeconds,
         lastWatchedAt: h.lastWatchedAt,
         badge: h.contentId.badge || null,
+        planRequired,
+        isAvailable,
+        status,
+        hlsUrl,
       };
     }).filter(Boolean); // remove any nulls from deleted content
 
@@ -243,6 +267,33 @@ export const deleteWatchHistoryItem = async (request: FastifyRequest, reply: Fas
     return reply.status(500).send({
       success: false,
       message: 'Failed to delete watch history item.',
+      error: error.message,
+    });
+  }
+};
+
+export const clearAllWatchHistory = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = (request as any).user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized.' });
+    }
+
+    const deleteResult = await UserWatchProgressModel.deleteMany({
+      userId: new mongoose.Types.ObjectId(userId)
+    });
+
+    return reply.send({
+      success: true,
+      message: 'All watch history cleared successfully.',
+      deletedCount: deleteResult.deletedCount
+    });
+
+  } catch (error: any) {
+    logger.error({ error }, 'Error clearing all watch history');
+    return reply.status(500).send({
+      success: false,
+      message: 'Failed to clear all watch history.',
       error: error.message,
     });
   }
