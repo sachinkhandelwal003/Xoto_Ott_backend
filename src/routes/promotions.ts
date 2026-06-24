@@ -11,8 +11,8 @@ import {
 } from '../controllers/promotionController';
 
 const promotionsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/promotions', { onRequest: [requirePermission('promotions', 'canView')] }, listPromotions);
-  fastify.get('/promotions/active', { onRequest: [requirePermission('promotions', 'canView')] }, getActivePromotion);
+  fastify.get('/promotions', listPromotions);
+  fastify.get('/promotions/active', getActivePromotion);
   fastify.get('/promotions/:id', { onRequest: [requirePermission('promotions', 'canView')] }, getPromotion);
   fastify.post('/promotions', { onRequest: [requirePermission('promotions', 'canCreate')] }, createPromotion);
   fastify.put('/promotions/:id', { onRequest: [requirePermission('promotions', 'canEdit')] }, updatePromotion);

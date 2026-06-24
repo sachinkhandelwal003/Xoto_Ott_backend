@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { FastifyRequest } from 'fastify';
 import { MediaFileModel } from '../models/MediaFile';
+import { MediaFolderModel } from '../models/MediaFolder';
 import { Types } from 'mongoose';
 import { uploadToS3, deleteFromS3, isS3Configured } from './s3';
 
@@ -141,6 +142,19 @@ export const saveFileFromPart = async (
     );
   }
 
+  // Auto-resolve folder ID if not provided
+  let resolvedFolderId = options?.folderId;
+  if (!resolvedFolderId && typeConfig.defaultDir) {
+    try {
+      const folderMatch = await MediaFolderModel.findOne({ name: { $regex: new RegExp(`^${typeConfig.defaultDir}$`, 'i') } });
+      if (folderMatch) {
+        resolvedFolderId = folderMatch._id.toString();
+      }
+    } catch (error) {
+      console.error('Error resolving folder ID:', error);
+    }
+  }
+
   const fileName = generateUniqueFileName(part.filename);
   const s3Key = targetDir ? `${targetDir}/${fileName}` : fileName;
 
@@ -150,6 +164,24 @@ export const saveFileFromPart = async (
       chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
+    const fileSize = buffer.length;
+
+    // Deduplication check for S3
+    const existingFile = await MediaFileModel.findOne({ name: part.filename, fileSize });
+    if (existingFile) {
+      return {
+        originalName: existingFile.name,
+        fileName: path.basename(existingFile.filePath || existingFile.url),
+        filePath: existingFile.filePath || existingFile.url,
+        url: existingFile.url,
+        fileSize: existingFile.fileSize,
+        mimeType: existingFile.fileType,
+        uploadType,
+        storageType: existingFile.storageType as 'local' | 's3',
+        s3Key: existingFile.s3Key,
+      };
+    }
+
     const publicUrl = await uploadToS3(s3Key, buffer, part.mimetype || 'application/octet-stream');
 
     const fileInfo: UploadedFileInfo = {
@@ -157,7 +189,7 @@ export const saveFileFromPart = async (
       fileName,
       filePath: s3Key,
       url: publicUrl,
-      fileSize: buffer.length,
+      fileSize,
       mimeType: part.mimetype || 'application/octet-stream',
       uploadType,
       storageType: 's3',
@@ -170,9 +202,9 @@ export const saveFileFromPart = async (
           name: part.filename,
           url: fileInfo.url,
           filePath: fileInfo.filePath,
-          fileSize: buffer.length,
+          fileSize,
           fileType: part.mimetype || 'application/octet-stream',
-          folder: options?.folderId ? new Types.ObjectId(options.folderId) : undefined,
+          folder: resolvedFolderId ? new Types.ObjectId(resolvedFolderId) : undefined,
           source: options?.source || uploadType.toLowerCase(),
           sourceId: options?.sourceId ? new Types.ObjectId(options.sourceId) : undefined,
           storageType: 's3',
@@ -195,6 +227,26 @@ export const saveFileFromPart = async (
 
       writeStream.on('finish', async () => {
         const stats = fs.statSync(fullFilePath);
+        
+        // Deduplication check for local disk
+        const existingFile = await MediaFileModel.findOne({ name: part.filename, fileSize: stats.size });
+        if (existingFile) {
+          // Delete duplicate temp file
+          fs.unlinkSync(fullFilePath);
+          
+          return resolve({
+            originalName: existingFile.name,
+            fileName: path.basename(existingFile.filePath || existingFile.url),
+            filePath: existingFile.filePath || existingFile.url,
+            url: existingFile.url,
+            fileSize: existingFile.fileSize,
+            mimeType: existingFile.fileType,
+            uploadType,
+            storageType: existingFile.storageType as 'local' | 's3',
+            s3Key: existingFile.s3Key,
+          });
+        }
+
         const protocol = request.protocol;
         const host = request.headers.host;
         const baseUrl = `${protocol}://${host}`;
@@ -218,7 +270,7 @@ export const saveFileFromPart = async (
               filePath: fileInfo.filePath,
               fileSize: stats.size,
               fileType: part.mimetype || 'application/octet-stream',
-              folder: options?.folderId ? new Types.ObjectId(options.folderId) : undefined,
+              folder: resolvedFolderId ? new Types.ObjectId(resolvedFolderId) : undefined,
               source: options?.source || uploadType.toLowerCase(),
               sourceId: options?.sourceId ? new Types.ObjectId(options.sourceId) : undefined,
               storageType: 'local'

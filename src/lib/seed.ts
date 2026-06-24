@@ -1446,42 +1446,78 @@ async function seedUserData() {
   for (const user of users) {
     const userId = user._id;
 
-    await UserDownloadModel.findOneAndUpdate(
-      { userId, contentId: movie._id, episodeId: null },
-      { contentModelType: 'Movie' },
-      { upsert: true, new: true }
-    );
+    // Seed watch progress (History) if not exists
+    const progressCount = await UserWatchProgressModel.countDocuments({ userId });
+    if (progressCount === 0) {
+      // 1. Movie Watch Progress
+      await UserWatchProgressModel.create({
+        userId,
+        contentId: movie._id,
+        episodeId: null,
+        contentModelType: 'Movie',
+        progressSeconds: 1200,
+        durationSeconds: 7200,
+        progressPercent: 17,
+        lastWatchedAt: new Date(Date.now() - 3600000 * 2), // 2 hours ago
+      });
 
-    if (episode) {
-      await UserDownloadModel.findOneAndUpdate(
-        { userId, contentId: drama._id, episodeId: episode._id },
-        { contentModelType: 'Content' },
-        { upsert: true, new: true }
-      );
+      // 2. Episode Watch Progress
+      if (episode) {
+        await UserWatchProgressModel.create({
+          userId,
+          contentId: drama._id,
+          episodeId: episode._id,
+          contentModelType: 'Content',
+          progressSeconds: 300,
+          durationSeconds: 900,
+          progressPercent: 33,
+          lastWatchedAt: new Date(Date.now() - 3600000), // 1 hour ago
+        });
+      }
     }
 
-    await UserWishlistModel.findOneAndUpdate(
-      { userId, contentId: movie._id },
-      { contentModelType: 'Movie' },
-      { upsert: true, new: true }
-    );
+    // Seed downloads if not exists
+    const downloadCount = await UserDownloadModel.countDocuments({ userId });
+    if (downloadCount === 0) {
+      await UserDownloadModel.create({
+        userId,
+        contentId: movie._id,
+        episodeId: null,
+        contentModelType: 'Movie',
+      });
 
-    await UserWishlistModel.findOneAndUpdate(
-      { userId, contentId: drama._id },
-      { contentModelType: 'Content' },
-      { upsert: true, new: true }
-    );
+      if (episode) {
+        await UserDownloadModel.create({
+          userId,
+          contentId: drama._id,
+          episodeId: episode._id,
+          contentModelType: 'Content',
+        });
+      }
+    }
+
+    // Seed wishlist if not exists
+    const wishlistCount = await UserWishlistModel.countDocuments({ userId });
+    if (wishlistCount === 0) {
+      await UserWishlistModel.create({
+        userId,
+        contentId: movie._id,
+        contentModelType: 'Movie',
+      });
+
+      await UserWishlistModel.create({
+        userId,
+        contentId: drama._id,
+        contentModelType: 'Content',
+      });
+    }
   }
-  logger.info('Seeded user download and wishlist items for existing users');
+  logger.info('Seeded/verified default watch progress, downloads, and wishlist items for users');
 }
 
 async function cleanAllDummyTables() {
-  logger.info('Cleaning up user activity and dummy collections...');
+  logger.info('Cleaning up admin/dummy collections...');
   await Promise.all([
-    UserDownloadModel.deleteMany({}),
-    UserWishlistModel.deleteMany({}),
-    UserLikeModel.deleteMany({}),
-    UserWatchProgressModel.deleteMany({}),
     ReviewModel.deleteMany({}),
     NotificationLogModel.deleteMany({}),
     AdminNotificationModel.deleteMany({}),
@@ -1490,7 +1526,7 @@ async function cleanAllDummyTables() {
     PromotionModel.deleteMany({}),
     LiveChannelModel.deleteMany({}),
   ]);
-  logger.info('Cleaned up 11 collections successfully.');
+  logger.info('Cleaned up dummy collections successfully.');
 }
 
 export async function seedDatabase(): Promise<void> {
@@ -1518,9 +1554,8 @@ export async function seedDatabase(): Promise<void> {
       seedPages(),
     ]);
 
-    // seedUserData() intentionally NOT called here — it inserts fake wishlist/download
-    // records for every user in the DB, which pollutes real user data and breaks the
-    // toggle logic (first "add" just removes the seed entry instead of adding a new one).
+    // Seed test user data (downloads, wishlist, history) safely if empty
+    await seedUserData();
 
     logger.info('Database seeding complete');
   } catch (err) {
