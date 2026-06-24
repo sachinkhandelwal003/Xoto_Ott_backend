@@ -333,14 +333,13 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       type: 'drama'
     }));
 
-    // 4. App Links / Pages — resolve real slugs from DB
+    // 4. App Links / Pages — resolve web page URLs
     const pages = await PageModel.find({ status: 'published' }).lean();
 
-    // Helper: build full API URL if slug exists in DB, otherwise null
-    const getPageUrl = (slug: string): string | null => {
-      const found = pages.find(p => p.slug === slug);
+    // Helper: build full web page URL
+    const getWebPageUrl = (slug: string): string => {
       const baseUrl = `${request.protocol}://${request.headers.host || request.hostname}`;
-      return found ? `${baseUrl}/api/pages/${found.slug}` : null;
+      return `${baseUrl}/page/${slug}`;
     };
 
     // Fetch platform/contact info from settings
@@ -355,22 +354,24 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       shareAppTitle: 'Share the App',
       shareAppText,
       shareAppUrl: 'https://play.google.com/store/apps/details?id=com.xoto.ott',
+      privacyPolicy: getWebPageUrl('privacy-policy'),
+      termsOfService: getWebPageUrl('terms-of-service'),
       links: [
         {
           title: 'Privacy Policy',
-          url: getPageUrl('privacy-policy') || `${baseUrl}/api/pages/privacy-policy`
+          url: getWebPageUrl('privacy-policy')
         },
         {
           title: 'Terms & Conditions',
-          url: getPageUrl('terms-of-service') || `${baseUrl}/api/pages/terms-of-service`
+          url: getWebPageUrl('terms-of-service')
         },
         {
           title: 'Contact Us',
-          url: getPageUrl('contact') || `mailto:${contactEmail}`
+          url: pages.find(p => p.slug === 'contact') ? getWebPageUrl('contact') : `mailto:${contactEmail}`
         },
         {
           title: 'Help Center',
-          url: getPageUrl('help') || `${baseUrl}/api/pages/help`
+          url: getWebPageUrl('help')
         },
       ],
       appVersion: 'V1.2.4',
