@@ -1554,8 +1554,7 @@ export async function seedDatabase(): Promise<void> {
       seedPages(),
     ]);
 
-    // Seed test user data (downloads, wishlist, history) safely if empty
-    await seedUserData();
+    // User data (downloads, wishlist, history) is not seeded; it is generated purely by API usage.
 
     logger.info('Database seeding complete');
   } catch (err) {

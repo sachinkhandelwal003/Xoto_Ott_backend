@@ -62,19 +62,6 @@ export const saveWatchProgress = async (request: FastifyRequest, reply: FastifyR
     };
 
     const percent = Math.min(100, Math.max(0, Math.round((progressSeconds / durationSeconds) * 100)));
-    const isNearlyCompleted = percent > 95 || (durationSeconds - progressSeconds) <= 10;
-
-    if (isNearlyCompleted) {
-      await UserWatchProgressModel.deleteOne(filter);
-      return reply.send({
-        success: true,
-        message: 'Watch progress cleared because the content is nearly completed.',
-        data: {
-          cleared: true,
-          progressPercent: percent,
-        },
-      });
-    }
 
     const progressDoc = await UserWatchProgressModel.findOneAndUpdate(
       filter,
@@ -252,13 +239,24 @@ export const deleteWatchHistoryItem = async (request: FastifyRequest, reply: Fas
     const { id } = request.params as { id: string };
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return reply.status(400).send({ success: false, message: 'Invalid history ID.' });
+      return reply.status(400).send({ success: false, message: 'Invalid ID format.' });
     }
 
-    const deleteResult = await UserWatchProgressModel.deleteOne({
-      _id: new mongoose.Types.ObjectId(id),
+    const targetId = new mongoose.Types.ObjectId(id);
+
+    // Try deleting by document _id first
+    let deleteResult = await UserWatchProgressModel.deleteOne({
+      _id: targetId,
       userId: new mongoose.Types.ObjectId(userId)
     });
+
+    // If not deleted, try deleting by contentId
+    if (deleteResult.deletedCount === 0) {
+      deleteResult = await UserWatchProgressModel.deleteOne({
+        contentId: targetId,
+        userId: new mongoose.Types.ObjectId(userId)
+      });
+    }
 
     if (deleteResult.deletedCount === 0) {
       return reply.status(404).send({ success: false, message: 'Watch history item not found or unauthorized.' });
