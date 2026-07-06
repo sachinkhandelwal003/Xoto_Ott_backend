@@ -29,8 +29,8 @@ async function startServer() {
   try {
     await Promise.all([connectMongoDB(), connectRedis()]);
 
-    // Seed database with initial data
-    await seedDatabase();
+    // Seed database with initial data (Disabled on startup to preserve data)
+    // await seedDatabase();
 
     await fastify.listen({ port, host: '0.0.0.0' });
     logger.info({ port }, 'Server listening');

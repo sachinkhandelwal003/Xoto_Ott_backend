@@ -34,6 +34,7 @@ import shareRoutes from './share';
 import wishlistRoutes from './wishlist';
 import appProfileRoutes from './appProfile';
 import downloadRoutes from './download';
+import webDownloadRoutes from './webDownload';
 import watchProgressRoutes from './watchProgress';
 import { getHomePage } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
@@ -44,8 +45,10 @@ import { getWebDetail } from '../controllers/webDetailController';
 import { getMovieDetail } from '../controllers/appMovieController';
 import adRoutes from './ad';
 import adminNotificationsRoutes from './adminNotifications';
+import reviewRoutes from './review';
 
 const router: FastifyPluginAsync = async (fastify) => {
+  fastify.register(reviewRoutes);
   fastify.register(adminNotificationsRoutes, { prefix: '/admin-notifications' });
   fastify.register(adRoutes);
   fastify.register(healthRoutes);
@@ -95,6 +98,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Download routes (POST /download, GET /downloads, DELETE /downloads/:id)
   fastify.register(downloadRoutes, { prefix: '/app' });
+
+  // Web download routes — separate from app, no subscription gate
+  fastify.register(webDownloadRoutes, { prefix: '/web' });
 
   // Watch progress routes (POST /watch/progress, DELETE /watch/progress/:contentId)
   fastify.register(watchProgressRoutes, { prefix: '/app' });

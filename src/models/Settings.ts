@@ -72,6 +72,12 @@ export interface ISettings extends Document {
   socialLogin: boolean;
   twoFactorAuth: boolean;
   emailVerification: boolean;
+  // Social OAuth credentials
+  googleClientId: string;
+  appleClientId: string;
+  appleTeamId: string;
+  appleKeyId: string;
+  applePrivateKey: string;
   // Notifications
   fcmServerKey: string;
   fcmSenderId: string;
@@ -121,11 +127,11 @@ export interface ISettings extends Document {
 const SettingsSchema = new Schema<ISettings>(
   {
     // Business
-    platformName: { type: String, default: 'Kotibox' },
+    platformName: { type: String, default: 'Triple Minds' },
     contactNo: { type: String, default: '' },
     inquiryEmail: { type: String, default: '' },
     siteDescription: { type: String, default: '' },
-    copyrightText: { type: String, default: '© 2026 Kotibox. All Rights Reserved.' },
+    copyrightText: { type: String, default: '© 2026 Triple Minds. All Rights Reserved.' },
     facebookUrl: { type: String, default: '' },
     twitterUrl: { type: String, default: '' },
     instagramUrl: { type: String, default: '' },
@@ -147,8 +153,8 @@ const SettingsSchema = new Schema<ISettings>(
     mailEncryption: { type: String, default: 'tls' },
     mailUsername: { type: String, default: '' },
     mailPassword: { type: String, default: '' },
-    mailFrom: { type: String, default: 'info@kotibox.com' },
-    mailFromName: { type: String, default: 'Kotibox' },
+    mailFrom: { type: String, default: 'info@tripleminds.com' },
+    mailFromName: { type: String, default: 'Triple Minds' },
     // Storage
     storageDriver: { type: String, enum: ['local', 's3', 'bunny'], default: 'local' },
     awsAccessKeyId: { type: String, default: '' },
@@ -191,6 +197,12 @@ const SettingsSchema = new Schema<ISettings>(
     socialLogin: { type: Boolean, default: true },
     twoFactorAuth: { type: Boolean, default: false },
     emailVerification: { type: Boolean, default: true },
+    // Social OAuth credentials
+    googleClientId: { type: String, default: '' },
+    appleClientId: { type: String, default: '' },
+    appleTeamId: { type: String, default: '' },
+    appleKeyId: { type: String, default: '' },
+    applePrivateKey: { type: String, default: '' },
     // Notifications
     fcmServerKey: { type: String, default: '' },
     fcmSenderId: { type: String, default: '' },

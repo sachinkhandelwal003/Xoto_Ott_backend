@@ -3,6 +3,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { storeRefreshToken, revokeRefreshToken } from '../lib/redis';
 import { AdminUserModel } from '../models/AdminUser';
+import { logger } from '../lib/logger';
+import * as uploadHandler from '../lib/uploadHandler';
+import { generatePresignedUrl, isS3Configured } from '../lib/s3';
 
 export const login = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -42,7 +45,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
 
     const server = request.server as any;
     const accessToken = server.jwt.sign(payload, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+      expiresIn: process.env.JWT_EXPIRES_IN || '48h',
     });
 
     const refreshToken = server.jwt.sign(
@@ -57,7 +60,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.status(200).send({
       accessToken,
       refreshToken,
-      expiresIn: 86400,
+      expiresIn: 172800,
     });
   } catch (error) {
     console.error(error);
@@ -251,5 +254,74 @@ export const setupAdmin = async (request: FastifyRequest, reply: FastifyReply) =
   } catch (error) {
     console.error(error);
     return reply.status(500).send({ error: 'Internal server error' });
+  }
+};
+
+// Upload admin avatar — multipart upload
+export const uploadAdminAvatar = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = (request.user as any).id;
+    if (!userId) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const parts = request.parts();
+    let avatarUrl: string | null = null;
+
+    for await (const part of parts) {
+      if (part.type === 'file' && part.fieldname === 'avatar') {
+        const fileInfo = await uploadHandler.saveFileFromPart(part, request, 'IMAGE', 'avatars');
+        avatarUrl = fileInfo.url;
+        break;
+      }
+    }
+
+    if (!avatarUrl) {
+      return reply.status(400).send({ error: 'No avatar file provided' });
+    }
+
+    await AdminUserModel.findByIdAndUpdate(userId, { $set: { avatar: avatarUrl } });
+
+    return reply.send({
+      success: true,
+      data: { avatarUrl },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error uploading admin avatar');
+    return reply.status(500).send({ error: 'Failed to upload avatar' });
+  }
+};
+
+// GET presigned URL for direct-to-S3 avatar upload
+export const getAvatarPresignedUrl = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const s3Ready = await isS3Configured();
+    if (!s3Ready) {
+      return reply.status(400).send({ success: false, s3: false, message: 'S3 not configured – use server-side upload' });
+    }
+    const { ext = 'jpg', contentType = 'image/jpeg' } = request.query as { ext?: string; contentType?: string };
+    const safeExt = ext.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
+    const key = `avatars/${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`;
+    const result = await generatePresignedUrl(key, contentType, 300); // 5-min TTL
+    return reply.send({ success: true, s3: true, ...result });
+  } catch (error: any) {
+    logger.error({ error }, 'Error generating avatar presigned URL');
+    return reply.status(500).send({ error: 'Failed to generate presigned URL' });
+  }
+};
+
+// Confirm S3 avatar upload – save publicUrl to AdminUser
+export const confirmAvatarUpload = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = (request.user as any).id;
+    const { publicUrl } = request.body as { publicUrl: string };
+    if (!publicUrl || !publicUrl.startsWith('http')) {
+      return reply.status(400).send({ error: 'Invalid publicUrl' });
+    }
+    await AdminUserModel.findByIdAndUpdate(userId, { $set: { avatar: publicUrl } });
+    return reply.send({ success: true, data: { avatarUrl: publicUrl } });
+  } catch (error: any) {
+    logger.error({ error }, 'Error confirming avatar upload');
+    return reply.status(500).send({ error: 'Failed to confirm avatar upload' });
   }
 };

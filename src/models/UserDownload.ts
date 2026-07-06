@@ -5,6 +5,7 @@ export interface IUserDownload extends Document {
   contentId: Types.ObjectId;
   episodeId?: Types.ObjectId | null; // null = Movie download; set = Episode download
   contentModelType: 'Content' | 'Movie'; // which collection contentId refers to
+  profileId?: string | null; // OTT profile isolation (null = default/unscoped)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +16,7 @@ const UserDownloadSchema = new Schema<IUserDownload>(
     contentId: { type: Schema.Types.ObjectId, required: true, index: true },
     episodeId: { type: Schema.Types.ObjectId, ref: 'Episode', default: null, index: true },
     contentModelType: { type: String, enum: ['Content', 'Movie'], required: true },
+    profileId: { type: String, default: null, index: true },
   },
   { timestamps: true }
 );

@@ -18,8 +18,9 @@ export const saveWatchProgress = async (request: FastifyRequest, reply: FastifyR
       episodeId?: string;
       progressSeconds?: number;
       durationSeconds?: number;
+      profileId?: string;
     };
-    const { contentId, episodeId, progressSeconds, durationSeconds } = body;
+    const { contentId, episodeId, progressSeconds, durationSeconds, profileId } = body;
 
     if (!contentId || progressSeconds === undefined || durationSeconds === undefined) {
       return reply.status(400).send({ success: false, message: 'contentId, progressSeconds, and durationSeconds are required.' });
@@ -59,6 +60,7 @@ export const saveWatchProgress = async (request: FastifyRequest, reply: FastifyR
       userId: new mongoose.Types.ObjectId(userId),
       contentId: new mongoose.Types.ObjectId(contentId),
       episodeId: episodeId ? new mongoose.Types.ObjectId(episodeId) : null,
+      profileId: profileId || null,
     };
 
     const percent = Math.min(100, Math.max(0, Math.round((progressSeconds / durationSeconds) * 100)));
@@ -86,6 +88,42 @@ export const saveWatchProgress = async (request: FastifyRequest, reply: FastifyR
       message: 'Failed to save watch progress.',
       error: error.message,
     });
+  }
+};
+
+export const getWatchProgressItem = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = (request as any).user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized.' });
+    }
+
+    const { contentId, episodeId, profileId } = request.query as { contentId?: string; episodeId?: string; profileId?: string };
+
+    if (!contentId || !mongoose.Types.ObjectId.isValid(contentId)) {
+      return reply.status(400).send({ success: false, message: 'Valid contentId is required.' });
+    }
+
+    const filter: any = {
+      userId: new mongoose.Types.ObjectId(userId),
+      contentId: new mongoose.Types.ObjectId(contentId),
+      episodeId: episodeId && mongoose.Types.ObjectId.isValid(episodeId) ? new mongoose.Types.ObjectId(episodeId) : null,
+      profileId: profileId || null,
+    };
+
+    const doc = await UserWatchProgressModel.findOne(filter).lean();
+
+    return reply.send({
+      success: true,
+      data: doc ? {
+        progressSeconds: doc.progressSeconds,
+        durationSeconds: doc.durationSeconds,
+        progressPercent: doc.progressPercent,
+      } : null,
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error fetching watch progress item');
+    return reply.status(500).send({ success: false, message: 'Failed to fetch watch progress.', error: error.message });
   }
 };
 

@@ -76,6 +76,8 @@ export const getPageById = async (request: FastifyRequest, reply: FastifyReply) 
         content: page.content,
         status: page.status,
         order: page.order,
+        metaTitle: page.metaTitle,
+        metaDescription: page.metaDescription,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
       },
@@ -93,6 +95,8 @@ export const createPage = async (request: FastifyRequest, reply: FastifyReply) =
       content?: string;
       status?: 'draft' | 'published';
       order?: number;
+      metaTitle?: string;
+      metaDescription?: string;
     };
 
     if (!body.title || !body.slug) {
@@ -105,6 +109,8 @@ export const createPage = async (request: FastifyRequest, reply: FastifyReply) =
       content: body.content,
       status: body.status || 'draft',
       order: body.order || 0,
+      metaTitle: body.metaTitle,
+      metaDescription: body.metaDescription,
     });
 
     return reply.status(201).send({
@@ -116,6 +122,8 @@ export const createPage = async (request: FastifyRequest, reply: FastifyReply) =
         content: page.content,
         status: page.status,
         order: page.order,
+        metaTitle: page.metaTitle,
+        metaDescription: page.metaDescription,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
       },
@@ -137,6 +145,8 @@ export const updatePage = async (request: FastifyRequest, reply: FastifyReply) =
       content?: string;
       status?: 'draft' | 'published';
       order?: number;
+      metaTitle?: string;
+      metaDescription?: string;
     };
 
     const page = await PageModel.findByIdAndUpdate(
@@ -158,6 +168,8 @@ export const updatePage = async (request: FastifyRequest, reply: FastifyReply) =
         content: page.content,
         status: page.status,
         order: page.order,
+        metaTitle: page.metaTitle,
+        metaDescription: page.metaDescription,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
       },

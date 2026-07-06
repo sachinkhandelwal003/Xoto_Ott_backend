@@ -510,6 +510,7 @@ export const createEpisodeSlices = async ({
   totalDurationMinutes,
   freeEpisodeCount,
   lockEpisodes = true,
+  seasonNumber = 1,
 }: {
   contentId: Types.ObjectId;
   sourceVideoUrl: string;
@@ -518,12 +519,20 @@ export const createEpisodeSlices = async ({
   totalDurationMinutes?: number;
   freeEpisodeCount?: number;
   lockEpisodes?: boolean;
+  seasonNumber?: number;
 }) => {
   const duration = totalDurationMinutes
     ? totalDurationMinutes * 60
     : (await getVideoDurationSeconds(sourceVideoPath)) || reelDurationMinutes * 60;
 
   const episodeCount = Math.floor(duration / (reelDurationMinutes * 60));
+
+  // Find the highest existing episode number for this content+season so we don't collide
+  const lastEpisode = await EpisodeModel.findOne({ contentId, season: seasonNumber })
+    .sort({ episode: -1 })
+    .lean();
+  const startEpisodeNum = lastEpisode ? (lastEpisode.episode as number) + 1 : 1;
+
   const episodes = [];
 
   for (let i = 0; i < episodeCount; i++) {
@@ -533,8 +542,8 @@ export const createEpisodeSlices = async ({
 
     episodes.push({
       contentId,
-      season: 1,
-      episode: i + 1,
+      season: seasonNumber,
+      episode: startEpisodeNum + i,
       title: `Episode ${i + 1}`,
       thumbnail: '',
       sourceVideoUrl,

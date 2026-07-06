@@ -133,9 +133,9 @@ export const getWebDetail = async (request: FastifyRequest, reply: FastifyReply)
 
     let episodes: any[] = [];
     if (!isMovie) {
-      const eps = await EpisodeModel.find({ contentId: item._id, processingStatus: 'ready' })
+      const eps = await EpisodeModel.find({ contentId: item._id })
         .sort({ season: 1, episode: 1 })
-        .select('title description thumbnail hlsUrl sourceVideoUrl duration season episode isFree videoQualities')
+        .select('title description thumbnail hlsUrl sourceVideoUrl duration season episode isFree isLocked videoQualities')
         .lean();
       episodes = eps.map((e: any) => {
         const epHlsUrl = e.hlsUrl || e.sourceVideoUrl;
@@ -161,10 +161,12 @@ export const getWebDetail = async (request: FastifyRequest, reply: FastifyReply)
           description: e.description,
           thumbnail: e.thumbnail,
           videoUrl: epHlsUrl,
+          hlsUrl: epHlsUrl,
           duration: e.duration ? `${e.duration}m` : '0m',
           season: e.season,
           episode: e.episode,
           isFree: e.isFree,
+          isLocked: e.isLocked ?? !e.isFree,
           videoSettings: epVideoSettings,
         };
       });

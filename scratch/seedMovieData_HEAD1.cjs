@@ -500,9 +500,9 @@ async function seed() {
 
     // Default video qualities if empty
     const videoQualities = [
-      { quality: '1080p', url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 120000000 },
-      { quality: '720p', url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 80000000 },
-      { quality: '360p', url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 30000000 },
+      { quality: '1080p', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 120000000 },
+      { quality: '720p', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 80000000 },
+      { quality: '360p', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 30000000 },
     ];
 
     await db.collection('movies').updateOne(

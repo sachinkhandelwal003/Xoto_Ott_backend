@@ -22,7 +22,7 @@ mongoose.connect('mongodb+srv://kotiboxserver_db_user:pS4U8tbfpRGZcPRz@cluster0.
         thumbnail: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=600&fit=crop&q=80',
         duration: 120 + i * 10,
         isFree: i <= 3, // First 3 episodes are free
-        hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        hlsUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
         trailerUrl: null,
         processingStatus: 'ready',
         airDate: new Date(),

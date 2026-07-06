@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { NotificationLogModel } from '../models/NotificationLog';
+import { AdminNotificationModel } from '../models/AdminNotification';
 
 export const listNotificationLogs = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -18,12 +18,12 @@ export const listNotificationLogs = async (request: FastifyRequest, reply: Fasti
     }
 
     const [notifications, total] = await Promise.all([
-      NotificationLogModel.find(filter)
+      AdminNotificationModel.find(filter)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
-      NotificationLogModel.countDocuments(filter),
+      AdminNotificationModel.countDocuments(filter),
     ]);
 
     return reply.send({
@@ -31,12 +31,12 @@ export const listNotificationLogs = async (request: FastifyRequest, reply: Fasti
       data: notifications.map((notification: any) => ({
         id: notification._id,
         type: notification.type,
-        isHighlight: notification.isHighlight,
+        isHighlight: !notification.isRead,
         title: notification.title,
-        text: notification.text,
-        userName: notification.userName,
-        userEmail: notification.userEmail,
-        updatedAt: notification.updatedAt,
+        text: notification.message,
+        userName: notification.modelName || 'System',
+        userEmail: notification.action ? notification.action.toUpperCase() : 'SYSTEM',
+        updatedAt: notification.createdAt,
       })),
       pagination: {
         page,
@@ -53,7 +53,7 @@ export const listNotificationLogs = async (request: FastifyRequest, reply: Fasti
 export const getNotificationLogById = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { notificationId } = request.params as { notificationId: string };
-    const notification = await NotificationLogModel.findById(notificationId).lean();
+    const notification = await AdminNotificationModel.findById(notificationId).lean();
 
     if (!notification) {
       return reply.status(404).send({ success: false, error: 'Notification not found' });
@@ -64,11 +64,11 @@ export const getNotificationLogById = async (request: FastifyRequest, reply: Fas
       data: {
         id: notification._id,
         type: notification.type,
-        isHighlight: notification.isHighlight,
+        isHighlight: !notification.isRead,
         title: notification.title,
-        text: notification.text,
-        userName: notification.userName,
-        userEmail: notification.userEmail,
+        text: notification.message,
+        userName: notification.modelName || 'System',
+        userEmail: notification.action ? notification.action.toUpperCase() : 'SYSTEM',
         createdAt: notification.createdAt,
         updatedAt: notification.updatedAt,
       },
@@ -89,31 +89,31 @@ export const createNotificationLog = async (request: FastifyRequest, reply: Fast
       userEmail: string;
     };
 
-    if (!body.type || !body.title || !body.text || !body.userName || !body.userEmail) {
+    if (!body.type || !body.title || !body.text) {
       return reply.status(400).send({ success: false, error: 'Missing required fields' });
     }
 
-    const notification = await NotificationLogModel.create({
-      type: body.type,
-      isHighlight: body.isHighlight || false,
+    const notification = await AdminNotificationModel.create({
+      type: body.type as any,
       title: body.title,
-      text: body.text,
-      userName: body.userName,
-      userEmail: body.userEmail,
+      message: body.text,
+      modelName: body.userName,
+      action: body.userEmail?.toLowerCase() as any,
+      isRead: !body.isHighlight,
     });
 
     return reply.status(201).send({
       success: true,
       data: {
-        id: notification._id,
-        type: notification.type,
-        isHighlight: notification.isHighlight,
-        title: notification.title,
-        text: notification.text,
-        userName: notification.userName,
-        userEmail: notification.userEmail,
-        createdAt: notification.createdAt,
-        updatedAt: notification.updatedAt,
+        id: notification!._id,
+        type: notification!.type,
+        isHighlight: !notification!.isRead,
+        title: notification!.title,
+        text: notification!.message,
+        userName: notification!.modelName,
+        userEmail: notification!.action ? notification!.action.toUpperCase() : 'SYSTEM',
+        createdAt: notification!.createdAt,
+        updatedAt: notification!.updatedAt,
       },
     });
   } catch (error: any) {
@@ -124,7 +124,7 @@ export const createNotificationLog = async (request: FastifyRequest, reply: Fast
 export const deleteNotificationLog = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { notificationId } = request.params as { notificationId: string };
-    const notification = await NotificationLogModel.findByIdAndDelete(notificationId);
+    const notification = await AdminNotificationModel.findByIdAndDelete(notificationId);
 
     if (!notification) {
       return reply.status(404).send({ success: false, error: 'Notification not found' });
@@ -147,13 +147,13 @@ export const bulkDeleteNotificationLogs = async (request: FastifyRequest, reply:
       return reply.status(400).send({ success: false, message: 'Invalid or empty ids array' });
     }
 
-    const result = await NotificationLogModel.deleteMany({ _id: { $in: ids } });
+    const result = await AdminNotificationModel.deleteMany({ _id: { $in: ids } });
 
-    return {
+    return reply.send({
       success: true,
       message: `${result.deletedCount} notifications deleted successfully`,
       deletedCount: result.deletedCount,
-    };
+    });
   } catch (error: any) {
     console.error('Error bulk deleting notifications:', error);
     return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });

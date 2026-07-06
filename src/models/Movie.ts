@@ -136,7 +136,7 @@ const MovieSchema = new Schema<IMovie>(
     imdbRating: { type: Number, min: 0, max: 10 },
     maturityContent: { type: [String], default: [] },
     subtitles: [{ language: { type: Schema.Types.ObjectId, ref: 'Language' }, filePath: String }],
-    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'free' },
+    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'premium' },
     slug: { type: String, index: true },
     metaTitle: String,
     metaDescription: String,

@@ -7,6 +7,7 @@ import fastifyCompress from '@fastify/compress';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import router from './routes';
+import { requestContext } from './lib/context';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,32 @@ const __dirname = path.dirname(__filename);
 const fastify = Fastify({
   logger: true,
   bodyLimit: 2000 * 1024 * 1024 // 2GB
+});
+
+// Register request context lifecycle hook
+fastify.addHook('onRequest', (request, reply, done) => {
+  const authHeader = request.headers.authorization;
+  let user: any = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const decoded = (request.server as any).jwt?.decode(token);
+      if (decoded) {
+        user = {
+          id: decoded.id || decoded._id,
+          email: decoded.email,
+          role: decoded.role,
+          name: decoded.name
+        };
+      }
+    } catch (e) {
+      // Ignore token decode errors
+    }
+  }
+
+  requestContext.run({ user }, () => {
+    done();
+  });
 });
 
 // ── JSON body parser (MUST be registered BEFORE multipart) ───────────────────

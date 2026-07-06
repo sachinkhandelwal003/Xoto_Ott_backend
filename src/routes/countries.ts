@@ -1,4 +1,4 @@
-import { requirePermission } from '../middlewares/rbac';
+import { requirePermission, authenticateAndAttach } from '../middlewares/rbac';
 import type { FastifyPluginAsync } from 'fastify';
 import {
   listCountries,
@@ -9,20 +9,20 @@ import {
 } from '../controllers/countryController';
 
 const countriesRoutes: FastifyPluginAsync = async (fastify) => {
-  // List all countries with pagination
-  fastify.get('/', { onRequest: [requirePermission('categories', 'canView')] }, listCountries);
+  // List all countries with pagination — allow any authenticated user so dropdowns work across forms
+  fastify.get('/', { onRequest: [authenticateAndAttach] }, listCountries);
 
-  // Get country by ID
-  fastify.get('/:id', { onRequest: [requirePermission('categories', 'canView')] }, getCountryById);
+  // Get country by ID — allow any authenticated user
+  fastify.get('/:id', { onRequest: [authenticateAndAttach] }, getCountryById);
 
-  // Create new country
-  fastify.post('/', { onRequest: [requirePermission('categories', 'canCreate')] }, createCountry);
+  // Create new country — require settings permission
+  fastify.post('/', { onRequest: [requirePermission('settings', 'canCreate')] }, createCountry);
 
-  // Update country
-  fastify.put('/:id', { onRequest: [requirePermission('categories', 'canEdit')] }, updateCountry);
+  // Update country — require settings permission
+  fastify.put('/:id', { onRequest: [requirePermission('settings', 'canEdit')] }, updateCountry);
 
-  // Delete country
-  fastify.delete('/:id', { onRequest: [requirePermission('categories', 'canDelete')] }, deleteCountry);
+  // Delete country — require settings permission
+  fastify.delete('/:id', { onRequest: [requirePermission('settings', 'canDelete')] }, deleteCountry);
 };
 
 export default countriesRoutes;

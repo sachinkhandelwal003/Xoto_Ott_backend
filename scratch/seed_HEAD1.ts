@@ -346,7 +346,7 @@ async function seedSampleContent() {
       rating: drama.genre === 'Romance' ? 'TV-14' : (drama.genre === 'Comedy' ? 'TV-PG' : 'TV-MA'),
       ageRating: drama.genre === 'Romance' ? 13 : (drama.genre === 'Comedy' ? 10 : 17),
       status: 'published' as const,
-      hlsUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       views: drama.views,
       likes: Math.floor(drama.views * 0.08),
       shares: Math.floor(drama.views * 0.02),
@@ -403,7 +403,7 @@ async function seedSampleContent() {
       rating: 'TV-14',
       ageRating: 14,
       status: 'published' as const,
-      hlsUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       views: show.views,
       likes: Math.floor(show.views * 0.08),
       shares: Math.floor(show.views * 0.02),
@@ -504,9 +504,9 @@ async function seedMovies() {
     }
 
     const videoQualities = [
-      { quality: '1080p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 120000000 },
-      { quality: '720p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 80000000 },
-      { quality: '360p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 30000000 },
+      { quality: '1080p' as const, url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 120000000 },
+      { quality: '720p' as const, url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 80000000 },
+      { quality: '360p' as const, url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', size: 30000000 },
     ];
 
     const staticId = `6a3387222e358a4c3dec${(0xdb34 + index).toString(16).padStart(4, '0')}`;
@@ -531,7 +531,7 @@ async function seedMovies() {
       duration: 6000 + (index % 10) * 300,
       releaseDate: daysAgo(movie.daysOld),
       status: 'published' as const,
-      hlsUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       videoQualities,
       views: movie.views,
       likes: Math.floor(movie.views * 0.08),
@@ -591,40 +591,26 @@ async function seedEpisodes() {
 
         const subtitleLanguages = hasEnglish ? [engLangId] : [hinLangId, engLangId].filter(Boolean);
         const audioLanguages = hasHindi ? [hinLangId] : [engLangId].filter(Boolean);
-        const videoQualities = [
-          { quality: '1080p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 120000000 },
-          { quality: '720p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 80000000 },
-          { quality: '360p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 30000000 },
-        ];
 
         episodes.push({
           _id: new mongoose.Types.ObjectId(staticId),
           contentId: item._id,
-          title: `Episode ${ep}`,
-          description: `This is the description for season ${season} episode ${ep} of ${item.title}. It contains exciting plot developments and character arcs.`,
-          thumbnail: `https://images.unsplash.com/photo-${1536440136628 + (epIndex % 10)}-849c177e76a1?w=400&h=600&fit=crop&q=80`,
-          duration: item.contentType === 'drama' ? Math.floor(Math.random() * 20) + 40 : 1200 + (ep * 60),
+          title: `${item.title} - S${season}E${ep}`,
+          description: `Season ${season}, Episode ${ep} of ${item.title}. ${item.description}`,
+          thumbnail: item.thumbnail,
+          duration: 1200 + Math.floor(Math.random() * 600), // 20-30 minutes
           season: season,
           episode: ep,
           isFree: season === 1 && ep <= 2, // First 2 episodes of S1 free
           isLocked: !(season === 1 && ep <= 2),
-          hlsUrl: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-          videoQualities,
+          hlsUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
           views: Math.floor(Math.random() * 500000) + 100000,
           likes: Math.floor(Math.random() * 25000) + 5000,
           shares: Math.floor(Math.random() * 5000) + 500,
-          downloadAllowed: true,
-          subtitleLanguages: [
-            languageMap.get('english'),
-            languageMap.get('hindi'),
-            languageMap.get('tamil')
-          ].filter(Boolean),
-          audioLanguages: [
-            languageMap.get('english'),
-            languageMap.get('hindi')
-          ].filter(Boolean),
+          downloadAllowed: season === 1 && ep <= 2,
+          subtitleLanguages,
+          audioLanguages,
           processingStatus: 'ready' as const,
-          airDate: new Date(Date.now() - (totalSeasons - season) * 31536000000 - (episodesPerSeason - ep) * 604800000),
           createdAt: new Date(),
           updatedAt: new Date(),
         });

@@ -17,7 +17,7 @@ const subscriptionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/subscriptions', { onRequest: [requirePermission('subscriptions', 'canCreate')] }, createSubscription);
   fastify.put('/subscriptions/:id', { onRequest: [requirePermission('subscriptions', 'canEdit')] }, updateSubscription);
   fastify.delete('/subscriptions/:id', { onRequest: [requirePermission('subscriptions', 'canDelete')] }, deleteSubscription);
-  fastify.post('/subscriptions/bulk-delete', { onRequest: [requirePermission('subscriptions', 'canCreate')] }, bulkDeleteSubscriptions);
+  fastify.post('/subscriptions/bulk-delete', { onRequest: [requirePermission('subscriptions', 'canDelete')] }, bulkDeleteSubscriptions);
   
   // Razorpay
   fastify.post('/subscriptions/razorpay/order', { onRequest: [requirePermission('subscriptions', 'canCreate')] }, createRazorpayOrder);

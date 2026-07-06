@@ -22,7 +22,7 @@ const notificationLogsRoutes: FastifyPluginAsync = async (fastify, opts) => {
   fastify.delete('/item/:notificationId', { onRequest: [requirePermission('notifications', 'canDelete')] }, deleteNotificationLog);
 
   // Bulk delete notification logs
-  fastify.post('/bulk-delete', { onRequest: [requirePermission('notifications', 'canCreate')] }, bulkDeleteNotificationLogs);
+  fastify.post('/bulk-delete', { onRequest: [requirePermission('notifications', 'canDelete')] }, bulkDeleteNotificationLogs);
 };
 
 export default notificationLogsRoutes;

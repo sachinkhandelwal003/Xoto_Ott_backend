@@ -9,10 +9,11 @@ import { logger } from '../lib/logger';
 export const toggleWishlist = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const params = (request.params || {}) as { contentId?: string };
-    const body = (request.body || {}) as { contentId?: string; contentType?: string; type?: string };
+    const body = (request.body || {}) as { contentId?: string; contentType?: string; type?: string; profileId?: string };
 
     const contentId = body.contentId || params.contentId;
     const rawType = body.contentType || body.type;
+    const profileId = body.profileId || null;
 
     if (!contentId) {
       return reply.status(400).send({ success: false, message: 'contentId is required' });
@@ -41,13 +42,13 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
       return reply.status(404).send({ success: false, message: 'Content not found' });
     }
 
-    const existingWishlist = await UserWishlistModel.findOne({ userId: userObjectId, contentId });
+    const existingWishlist = await UserWishlistModel.findOne({ userId: userObjectId, contentId, profileId });
 
     if (existingWishlist) {
       // Remove from wishlist
       await UserWishlistModel.deleteOne({ _id: existingWishlist._id });
       await UserModel.findByIdAndUpdate(userObjectId, { $inc: { watchlistCount: -1 } });
-      
+
       return reply.send({
         success: true,
         message: 'Removed from wishlist',
@@ -63,6 +64,7 @@ export const toggleWishlist = async (request: FastifyRequest, reply: FastifyRepl
         userId: userObjectId,
         contentId,
         contentModelType,
+        profileId,
       });
       await UserModel.findByIdAndUpdate(userObjectId, { $inc: { watchlistCount: 1 } });
       
@@ -92,18 +94,19 @@ export const getWishlist = async (request: FastifyRequest, reply: FastifyReply) 
     // Cast userId string to ObjectId for all DB queries
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
-    const query = request.query as { page?: string; limit?: string };
+    const query = request.query as { page?: string; limit?: string; profileId?: string };
     const page = Math.max(1, Number(query.page || 1));
     const limit = Math.min(50, Math.max(1, Number(query.limit || 20)));
     const skip = (page - 1) * limit;
+    const profileId = query.profileId || null;
 
     const [wishlistItems, total] = await Promise.all([
-      UserWishlistModel.find({ userId: userObjectId })
+      UserWishlistModel.find({ userId: userObjectId, profileId })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      UserWishlistModel.countDocuments({ userId: userObjectId }),
+      UserWishlistModel.countDocuments({ userId: userObjectId, profileId }),
     ]);
 
     // Fetch actual content for the wishlist items

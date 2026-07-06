@@ -5,7 +5,7 @@ import { GenreModel } from '../models/Genre';
 import { logger } from '../lib/logger';
 
 // Standardized mapping for website ContentItem
-const mapContentItem = (item: any, type: 'movie' | 'show') => {
+const mapContentItem = (item: any, type: 'movie' | 'show', queryContentType?: string) => {
   let badge;
   if (item.featured && item.trending) badge = 'EXCLUSIVE';
   else if (item.trending) badge = 'TRENDING';
@@ -19,6 +19,7 @@ const mapContentItem = (item: any, type: 'movie' | 'show') => {
     poster: item.posterImage || item.thumbnail || '',
     backdrop: item.bannerImage || item.thumbnail || '',
     type,
+    contentType: queryContentType || (type === 'movie' ? 'movie' : (item.contentType || 'series')),
     year: item.year?.toString() || new Date(item.createdAt).getFullYear().toString(),
     duration: item.duration ? `${item.duration}m` : '120m',
     imdbRating: item.imdbRating?.toString() || (item.rating || '8.0'),
@@ -33,10 +34,11 @@ const mapContentItem = (item: any, type: 'movie' | 'show') => {
 
 export const getWebBrowse = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
-    const query = request.query as { type?: string; genre?: string; page?: string; limit?: string; search?: string };
+    const query = request.query as { type?: string; genre?: string; page?: string; limit?: string; search?: string; section?: string };
     const contentType = query.type || 'movie'; // 'movie', 'show', 'drama'
     const genreName = query.genre;
     const searchTerm = query.search?.trim();
+    const section = query.section;
     const page = Math.max(1, Number(query.page || 1));
     const limit = Math.min(50, Math.max(1, Number(query.limit || 20)));
     const skip = (page - 1) * limit;
@@ -83,11 +85,20 @@ export const getWebBrowse = async (request: FastifyRequest, reply: FastifyReply)
       filter.contentType = 'drama';
     }
 
-    const selectFields = 'title description shortDescription thumbnail bannerImage posterImage year rating ageRating duration imdbRating featured trending isNewContent views genres languages createdAt';
+    let sort: any = { createdAt: -1 };
+    if (section === 'trending') {
+      sort = { views: -1, createdAt: -1 };
+    } else if (section === 'new') {
+      sort = { createdAt: -1 };
+    } else if (section === 'top-rated') {
+      sort = { imdbRating: -1, views: -1 };
+    }
+
+    const selectFields = 'title description shortDescription thumbnail bannerImage posterImage year rating ageRating duration imdbRating featured trending isNewContent views genres languages createdAt contentType';
 
     const [rawItems, total] = await Promise.all([
       Model.find(filter)
-        .sort({ createdAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(limit)
         .select(selectFields)
@@ -97,7 +108,7 @@ export const getWebBrowse = async (request: FastifyRequest, reply: FastifyReply)
     ]);
 
     const mappedType = contentType === 'movie' ? 'movie' : 'show';
-    const items = rawItems.map((item: any) => mapContentItem(item, mappedType));
+    const items = rawItems.map((item: any) => mapContentItem(item, mappedType, contentType));
 
     return reply.send({
       success: true,

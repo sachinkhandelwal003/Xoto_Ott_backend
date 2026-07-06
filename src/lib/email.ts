@@ -14,9 +14,9 @@ const replaceVariables = (template: string, variables: Record<string, string>): 
 const getPlatformName = async (): Promise<string> => {
   try {
     const settings = await SettingsModel.findOne().lean();
-    return (settings as any)?.platformName || process.env.PLATFORM_NAME || 'StreamVault';
+    return (settings as any)?.platformName || process.env.PLATFORM_NAME || 'Triple Minds';
   } catch {
-    return process.env.PLATFORM_NAME || 'StreamVault';
+    return process.env.PLATFORM_NAME || 'Triple Minds';
   }
 };
 
@@ -135,15 +135,20 @@ export const sendTemplateEmail = async (
     let subject: string;
     let html: string;
 
+    const allVars = {
+      platform_name: platformName,
+      ...variables,
+    };
+
     if (template && (template as any).status && (template as any).emailTemplate) {
-      subject = replaceVariables((template as any).emailSubject || type, variables);
-      const bodyContent = replaceVariables((template as any).emailTemplate, variables);
+      subject = replaceVariables((template as any).emailSubject || type, allVars);
+      const bodyContent = replaceVariables((template as any).emailTemplate, allVars);
       html = wrapEmail(bodyContent, platformName);
     } else {
       // Minimal fallback — still sends something meaningful
       subject = type;
-      const rows = Object.entries(variables)
-        .filter(([, v]) => v)
+      const rows = Object.entries(allVars)
+        .filter(([k, v]) => v && k !== 'platform_name')
         .map(([k, v]) => `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:140px;text-transform:capitalize;">${k.replace(/_/g, ' ')}</td><td style="padding:6px 0;color:#111827;font-weight:600;">${v}</td></tr>`)
         .join('');
       html = wrapEmail(`<p>You have a new notification from <strong>${platformName}</strong>.</p><table style="border-collapse:collapse;width:100%;margin-top:16px;">${rows}</table>`, platformName);
@@ -176,6 +181,7 @@ export const sendWelcomeEmail = async (email: string, name: string, username: st
     let html: string;
 
     const variables = {
+      platform_name: platformName,
       user_name: name,
       user_id: username,
       user_password: password,
@@ -240,6 +246,7 @@ export const sendAdminPasswordResetEmail = async (email: string, name: string, u
     let html: string;
 
     const variables = {
+      platform_name: platformName,
       user_name: name,
       user_id: username,
       user_password: password,

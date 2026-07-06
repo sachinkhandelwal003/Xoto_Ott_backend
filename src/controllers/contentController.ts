@@ -246,10 +246,15 @@ export const appendContentVideo = async (request: FastifyRequest, reply: Fastify
     let lockEpisodes = true;
     let videoUrl: string | undefined;
     let videoFilePath: string | undefined;
+    let seasonNumber = 1;
 
     for await (const part of (request as any).parts()) {
       if (part.type === 'field') {
-        if (part.fieldname === 'reelDurationMinutes') reelDurationMinutes = Number(part.value) || 3;
+        if (part.fieldname === 'reelDurationMinutes') {
+          const v = Number(part.value) || 3;
+          // Short dramas: cap episode duration at 3 minutes
+          reelDurationMinutes = content.contentType === 'drama' ? Math.min(v, 3) : v;
+        }
         if (part.fieldname === 'totalDurationMinutes') {
           const v = Number(part.value);
           if (v > 0) totalDurationMinutes = v;
@@ -257,6 +262,10 @@ export const appendContentVideo = async (request: FastifyRequest, reply: Fastify
         if (part.fieldname === 'freeEpisodeCount') freeEpisodeCount = Number(part.value);
         if (part.fieldname === 'lockEpisodes') lockEpisodes = part.value !== 'false';
         if (part.fieldname === 'videoUrl') videoUrl = part.value as string;
+        if (part.fieldname === 'season') {
+          const s = Number(part.value);
+          if (s > 0) seasonNumber = s;
+        }
       } else if (part.type === 'file' && part.fieldname === 'videoFile') {
         // Save file to a temp path for processing
         const { writeFile } = await import('fs/promises');
@@ -291,6 +300,7 @@ export const appendContentVideo = async (request: FastifyRequest, reply: Fastify
       totalDurationMinutes,
       freeEpisodeCount,
       lockEpisodes,
+      seasonNumber,
     });
 
     return reply.send({

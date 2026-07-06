@@ -21,6 +21,7 @@ const mapContentItem = (item: any, type: 'movie' | 'show', isHero = false) => {
     poster: item.posterImage || item.thumbnail || '',
     backdrop: item.bannerImage || item.thumbnail || '',
     type,
+    contentType: type === 'movie' ? 'movie' : (item.contentType || 'series'),
     year: item.year?.toString() || new Date(item.createdAt).getFullYear().toString(),
     duration: item.duration ? `${item.duration}m` : '120m',
     imdbRating: item.imdbRating?.toString() || (item.rating || '8.0'),
@@ -58,7 +59,7 @@ const mapShortDrama = (item: any, totalEpisodes: number, freeEpisodes: number) =
 export const getWebHome = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     // Shared projection to make queries extremely fast
-    const selectFields = 'title description shortDescription thumbnail bannerImage posterImage year rating ageRating duration imdbRating createdAt featured trending isNewContent views genres languages seasons';
+    const selectFields = 'title description shortDescription thumbnail bannerImage posterImage year rating ageRating duration imdbRating createdAt featured trending isNewContent views genres languages seasons contentType';
 
     // Parallel fetching for genres to use in filtering
     const [actionGenre, dramaGenre] = await Promise.all([

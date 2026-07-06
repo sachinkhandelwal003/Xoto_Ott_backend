@@ -118,7 +118,7 @@ const ContentSchema = new Schema<IContent>(
     imdbRating: { type: Number, min: 0, max: 10 },
     maturityContent: { type: [String], default: [] },
     seasons: Number,
-    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'free' },
+    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'premium' },
     slug: { type: String, index: true },
     metaTitle: String,
     metaDescription: String,

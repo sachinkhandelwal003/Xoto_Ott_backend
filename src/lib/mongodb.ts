@@ -15,8 +15,8 @@ export async function connectMongoDB(): Promise<boolean> {
   }
   try {
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 8000,
-      connectTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
     });
     isMongoConnected = true;
     logger.info({ dbName: mongoose.connection.name }, 'MongoDB Atlas connected');
@@ -24,13 +24,21 @@ export async function connectMongoDB(): Promise<boolean> {
     mongoose.connection.on('error', (err: unknown) => {
       logger.error({ err }, 'MongoDB connection error');
     });
+    mongoose.connection.on('connected', () => {
+      isMongoConnected = true;
+      logger.info('MongoDB connection established');
+    });
+    mongoose.connection.on('reconnected', () => {
+      isMongoConnected = true;
+      logger.info('MongoDB connection re-established');
+    });
     mongoose.connection.on('disconnected', () => {
       isMongoConnected = false;
-      logger.warn('MongoDB disconnected — falling back to mock data');
+      logger.warn('MongoDB disconnected — queries will buffer or fail');
     });
     return true;
   } catch (err) {
-    logger.warn({ err }, 'MongoDB connection failed — using in-memory mock data');
+    logger.warn({ err }, 'MongoDB connection failed');
     return false;
   }
 }

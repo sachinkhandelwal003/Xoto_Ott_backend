@@ -5,6 +5,7 @@ export interface IUserWatchProgress extends Document {
   contentId: Types.ObjectId;
   episodeId?: Types.ObjectId | null; // null = Movie progress; set = Episode progress
   contentModelType: 'Content' | 'Movie'; // which collection contentId refers to
+  profileId?: string | null; // OTT profile isolation (null = default/unscoped)
   progressSeconds: number;
   durationSeconds: number;
   progressPercent: number;
@@ -19,6 +20,7 @@ const UserWatchProgressSchema = new Schema<IUserWatchProgress>(
     contentId: { type: Schema.Types.ObjectId, required: true, refPath: 'contentModelType', index: true },
     episodeId: { type: Schema.Types.ObjectId, ref: 'Episode', default: null, index: true },
     contentModelType: { type: String, enum: ['Content', 'Movie'], required: true },
+    profileId: { type: String, default: null, index: true },
     progressSeconds: { type: Number, required: true },
     durationSeconds: { type: Number, required: true },
     progressPercent: { type: Number, required: true },

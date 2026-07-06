@@ -7,6 +7,7 @@ import { Types } from 'mongoose';
 import { BannerModel } from '../models/Banner';
 import { ContentModel } from '../models/Content';
 import { EpisodeModel } from '../models/Episode';
+import { MovieModel } from '../models/Movie';
 import uploadHandler from '../lib/uploadHandler';
 import { isS3Configured, getS3PublicUrl } from '../lib/s3';
 import { processEpisodesInBackground } from '../services/videoProcessor';
@@ -375,6 +376,82 @@ export const listBanners = async (request: FastifyRequest, reply: FastifyReply) 
   }
 };
 
+export const createBannerFromContent = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const body = request.body as {
+      contentId: string;
+      contentSource: 'movie' | 'content'; // which model to look in
+      title?: string;
+      subtitle?: string;
+      description?: string;
+      ctaText?: string;
+      ctaLink?: string;
+      position?: number;
+      isActive?: boolean;
+    };
+
+    if (!body.contentId || !body.contentSource) {
+      return reply.status(400).send({ success: false, message: 'contentId and contentSource are required' });
+    }
+
+    // Fetch the source content
+    let source: any = null;
+    if (body.contentSource === 'movie') {
+      source = await MovieModel.findById(body.contentId).lean();
+    } else {
+      source = await ContentModel.findById(body.contentId).lean();
+    }
+
+    if (!source) {
+      return reply.status(404).send({ success: false, message: 'Source content not found' });
+    }
+
+    // Check if a banner already exists for this content
+    const existing = await BannerModel.findOne({ contentId: body.contentId });
+    if (existing) {
+      return reply.status(409).send({
+        success: false,
+        message: 'A banner for this content already exists. Please edit the existing banner instead.',
+      });
+    }
+
+    const thumbnail = source.thumbnail || source.bannerImage || source.imageUrl || ensureDefaultBannerImage();
+    const title = body.title || source.title;
+
+    const banner = await BannerModel.create({
+      title,
+      subtitle: body.subtitle || source.shortDescription || '',
+      description: body.description || source.description || '',
+      imageUrl: thumbnail,
+      ctaText: body.ctaText || 'Watch Now',
+      ctaLink: body.ctaLink || '',
+      contentId: body.contentId,
+      type: 'hero',
+      position: Number.isFinite(body.position) ? body.position : 0,
+      isActive: body.isActive ?? true,
+      targetPlatforms: ['web', 'mobile'],
+    });
+
+    return reply.status(201).send({
+      success: true,
+      data: {
+        id: banner._id,
+        title: banner.title,
+        subtitle: banner.subtitle,
+        description: banner.description,
+        imageUrl: banner.imageUrl,
+        position: banner.position,
+        isActive: banner.isActive,
+        contentId: banner.contentId,
+      },
+      message: 'Banner created successfully from existing content.',
+    });
+  } catch (error: any) {
+    console.error('Error creating banner from content:', error);
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
 export const createBannerShow = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const data = await readBannerMultipart(request);
@@ -703,6 +780,59 @@ export const deleteBanner = async (request: FastifyRequest, reply: FastifyReply)
     };
   } catch (error: any) {
     console.error('Error deleting banner:', error);
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
+export const bulkDeleteBanners = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { ids } = request.body as { ids: string[] };
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.status(400).send({ success: false, message: 'Invalid or empty ids array' });
+    }
+
+    const banners = await BannerModel.find({ _id: { $in: ids } }).lean();
+
+    for (const banner of banners) {
+      const filesToDelete = new Set<string>();
+      if (banner.imageUrl) filesToDelete.add(banner.imageUrl);
+
+      if (banner.contentId) {
+        const [content, episodes] = await Promise.all([
+          ContentModel.findByIdAndDelete(banner.contentId).lean(),
+          EpisodeModel.find({ contentId: banner.contentId }).lean(),
+        ]);
+
+        if (content?.thumbnail) filesToDelete.add(content.thumbnail);
+        if (content?.bannerImage) filesToDelete.add(content.bannerImage);
+
+        for (const episode of episodes) {
+          if (episode.sourceVideoUrl) filesToDelete.add(episode.sourceVideoUrl);
+        }
+
+        await EpisodeModel.deleteMany({ contentId: banner.contentId });
+
+        const hlsFolder = path.join(uploadsRoot, 'hls', banner.contentId.toString());
+        if (fs.existsSync(hlsFolder)) {
+          fs.rmSync(hlsFolder, { recursive: true, force: true });
+        }
+      }
+
+      for (const filePath of Array.from(filesToDelete)) {
+        await uploadHandler.deleteUploadedFile(filePath);
+      }
+    }
+
+    const result = await BannerModel.deleteMany({ _id: { $in: ids } });
+
+    return reply.send({
+      success: true,
+      message: `${result.deletedCount} banner(s) deleted successfully`,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error: any) {
+    console.error('Error bulk deleting banners:', error);
     return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
   }
 };

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { saveWatchProgress, clearWatchProgress, getWatchHistory, deleteWatchHistoryItem, clearAllWatchHistory } from '../controllers/watchProgressController';
+import { saveWatchProgress, getWatchProgressItem, clearWatchProgress, getWatchHistory, deleteWatchHistoryItem, clearAllWatchHistory } from '../controllers/watchProgressController';
 
 const watchProgressRoutes: FastifyPluginAsync = async (fastify) => {
   // Requires authentication
@@ -10,6 +10,9 @@ const watchProgressRoutes: FastifyPluginAsync = async (fastify) => {
       reply.send(err);
     }
   });
+
+  // GET /api/app/watch/progress - Fetch saved progress for one item
+  fastify.get('/watch/progress', getWatchProgressItem);
 
   // POST /api/app/watch/progress - Save/upsert watch progress
   fastify.post('/watch/progress', saveWatchProgress);

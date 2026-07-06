@@ -6,6 +6,8 @@ import { MessageCentralService } from '../services/messageCentralService';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { sendTemplateEmail } from '../lib/email';
+import { SettingsModel } from '../models/Settings';
+import jwt from 'jsonwebtoken';
 
 const messageCentralService = new MessageCentralService();
 const STATIC_OTP = '1234';
@@ -92,6 +94,12 @@ export const verifyOtp = async (request: FastifyRequest, reply: FastifyReply) =>
       });
       await user.save();
     } else {
+      if (user.status === 'banned' || user.status === 'suspended') {
+        return reply.status(403).send({
+          success: false,
+          message: user.banReason ? `Your account has been suspended: ${user.banReason}` : 'Your account has been suspended.'
+        });
+      }
       user.lastLogin = new Date();
       user.loginCount += 1;
       await user.save();
@@ -207,24 +215,57 @@ export const skipPreferredLanguage = async (request: FastifyRequest, reply: Fast
   }
 };
 
-const registerSchema = z.object({ email: z.string().email(), password: z.string().min(6), name: z.string() });
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string(),
+  phone: z.string().optional(),
+});
 
 export const registerUser = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
+    // Check maintenance mode and registration setting
+    const siteSettings = await SettingsModel.findOne().lean();
+    if (siteSettings?.maintenanceMode) {
+      return reply.status(503).send({ success: false, message: 'The platform is currently under maintenance. Please try again later.', maintenance: true });
+    }
+    if (siteSettings?.userRegistration === false) {
+      return reply.status(403).send({ success: false, message: 'New user registration is currently disabled.' });
+    }
+
     const body = registerSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ success: false, message: 'Validation failed', errors: body.error.flatten().fieldErrors });
-    const { email, password, name } = body.data;
-    let user = await UserModel.findOne({ email });
-    if (user) return reply.status(400).send({ success: false, message: 'User already exists' });
+    const { email, password, name, phone } = body.data;
+
     const passwordHash = await bcrypt.hash(password, 10);
+
+    // If phone provided: check if an app user (phone-only) already exists — link accounts
+    if (phone) {
+      const appUser = await UserModel.findOne({ phone, email: { $exists: false } });
+      if (appUser) {
+        appUser.email = email;
+        appUser.passwordHash = passwordHash;
+        if (!appUser.name || appUser.name === phone) appUser.name = name;
+        await appUser.save();
+        const server = request.server as any;
+        const accessToken = server.jwt.sign({ id: appUser._id.toString(), name: appUser.name, role: 'user' }, { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' });
+        return reply.status(200).send({ success: true, accessToken, userId: appUser._id.toString(), name: appUser.name, subscriptionPlan: appUser.subscriptionPlan || 'free', subscriptionStatus: appUser.subscriptionStatus || 'inactive', expiresIn: 604800, linked: true });
+      }
+    }
+
+    // Normal registration — check email uniqueness
+    const existing = await UserModel.findOne({ email });
+    if (existing) return reply.status(400).send({ success: false, message: 'Email already registered' });
+
     const newProfile = { name, isKids: false, maturityLevel: 18, language: 'Hindi' };
-    user = new UserModel({ email, passwordHash, name, profiles: [newProfile], preferredLanguage: 'Hindi', languageSelectionSkipped: false });
+    const user = new UserModel({ email, passwordHash, name, phone: phone || undefined, profiles: [newProfile], preferredLanguage: 'Hindi', languageSelectionSkipped: false });
     await user.save();
-    // Send registration welcome email (non-blocking)
+
     sendTemplateEmail('Registration', email, {
       user_name: name,
       site_url: process.env.FRONTEND_URL || process.env.ADMIN_PANEL_URL || 'http://localhost:5173',
     }).catch((err) => console.error('[email] Registration email failed:', err));
+
     const server = request.server as any;
     const accessToken = server.jwt.sign({ id: user._id.toString(), name: user.name, role: 'user' }, { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' });
     return reply.status(200).send({ success: true, accessToken, userId: user._id.toString(), name: user.name, subscriptionPlan: user.subscriptionPlan || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', expiresIn: 604800 });
@@ -234,17 +275,38 @@ export const registerUser = async (request: FastifyRequest, reply: FastifyReply)
   }
 };
 
-const loginSchema = z.object({ email: z.string().email(), password: z.string() });
+// Login accepts email OR phone number (phone if no '@' in value)
+const loginSchema = z.object({ email: z.string().min(1), password: z.string() });
 
 export const loginUser = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
+    const siteSettings = await SettingsModel.findOne().lean();
+    if (siteSettings?.maintenanceMode) {
+      return reply.status(503).send({ success: false, message: 'The platform is currently under maintenance. Please try again later.', maintenance: true });
+    }
+
     const body = loginSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ success: false, message: 'Validation failed' });
-    const { email, password } = body.data;
-    const user = await UserModel.findOne({ email });
-    if (!user || !user.passwordHash) return reply.status(401).send({ success: false, message: 'Invalid credentials' });
+    const { email: emailOrPhone, password } = body.data;
+
+    // Determine if input is a phone number (no '@') or email
+    const isPhone = !emailOrPhone.includes('@');
+    const user = await UserModel.findOne(isPhone ? { phone: emailOrPhone } : { email: emailOrPhone });
+
+    if (!user) return reply.status(401).send({ success: false, message: 'No account found. Please register first.' });
+    
+    if (user.status === 'banned' || user.status === 'suspended') {
+      return reply.status(403).send({
+        success: false,
+        message: user.banReason ? `Your account has been suspended: ${user.banReason}` : 'Your account has been suspended.'
+      });
+    }
+
+    if (!user.passwordHash) return reply.status(401).send({ success: false, message: 'This account uses phone OTP login. Please set a password first.' });
+
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return reply.status(401).send({ success: false, message: 'Invalid credentials' });
+
     user.lastLogin = new Date();
     user.loginCount += 1;
     await user.save();
@@ -254,5 +316,129 @@ export const loginUser = async (request: FastifyRequest, reply: FastifyReply) =>
   } catch (error) {
     console.error('Login Error:', error);
     return reply.status(500).send({ success: false, message: 'Internal server error' });
+  }
+};
+
+// ── Helper: sign a user JWT ────────────────────────────────────────────────
+function signUserToken(request: FastifyRequest, user: any) {
+  const server = request.server as any;
+  return server.jwt.sign(
+    { id: user._id.toString(), name: user.name, role: 'user' },
+    { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' }
+  );
+}
+
+// ── Helper: find or create social user ────────────────────────────────────
+async function findOrCreateSocialUser(email: string, name: string, provider: string) {
+  let user = await UserModel.findOne({ email });
+  if (!user) {
+    const defaultProfile = { name, isKids: false, maturityLevel: 18, language: 'Hindi' };
+    user = new UserModel({
+      email,
+      passwordHash: await bcrypt.hash(Math.random().toString(36), 10),
+      name,
+      profiles: [defaultProfile],
+      preferredLanguage: 'Hindi',
+      languageSelectionSkipped: false,
+    });
+    await user.save();
+    sendTemplateEmail('Registration', email, { user_name: name, site_url: process.env.FRONTEND_URL || 'http://localhost:5173' }).catch(() => {});
+  }
+  return user;
+}
+
+// ── Google Sign In ─────────────────────────────────────────────────────────
+export const googleAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const siteSettings = await SettingsModel.findOne().lean();
+    if (siteSettings?.maintenanceMode) {
+      return reply.status(503).send({ success: false, message: 'The platform is under maintenance.', maintenance: true });
+    }
+    if (!siteSettings?.socialLogin) {
+      return reply.status(403).send({ success: false, message: 'Social login is disabled.' });
+    }
+    if (!siteSettings?.googleClientId) {
+      return reply.status(400).send({ success: false, message: 'Google Sign In is not configured.' });
+    }
+
+    const { idToken } = request.body as { idToken: string };
+    if (!idToken) return reply.status(400).send({ success: false, message: 'idToken is required' });
+
+    // Verify Google ID token via Google's tokeninfo endpoint
+    const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+    if (!verifyRes.ok) return reply.status(401).send({ success: false, message: 'Invalid Google token' });
+    const payload = await verifyRes.json() as any;
+
+    // Check audience matches our clientId
+    if (payload.aud !== siteSettings.googleClientId && payload.azp !== siteSettings.googleClientId) {
+      return reply.status(401).send({ success: false, message: 'Token audience mismatch' });
+    }
+    if (!payload.email) return reply.status(400).send({ success: false, message: 'No email in Google token' });
+
+    const user = await findOrCreateSocialUser(payload.email, payload.name || payload.email.split('@')[0], 'google');
+    const accessToken = signUserToken(request, user);
+    return reply.send({ success: true, accessToken, userId: user._id.toString(), name: user.name, subscriptionPlan: user.subscriptionPlan || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', expiresIn: 604800 });
+  } catch (error) {
+    console.error('Google Auth Error:', error);
+    return reply.status(500).send({ success: false, message: 'Google authentication failed' });
+  }
+};
+
+// ── Apple Sign In ──────────────────────────────────────────────────────────
+export const appleAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const siteSettings = await SettingsModel.findOne().lean();
+    if (siteSettings?.maintenanceMode) {
+      return reply.status(503).send({ success: false, message: 'The platform is under maintenance.', maintenance: true });
+    }
+    if (!siteSettings?.socialLogin) {
+      return reply.status(403).send({ success: false, message: 'Social login is disabled.' });
+    }
+    if (!siteSettings?.appleClientId) {
+      return reply.status(400).send({ success: false, message: 'Apple Sign In is not configured.' });
+    }
+
+    const { idToken, user: appleUser } = request.body as { idToken: string; user?: { name?: { firstName?: string; lastName?: string }; email?: string } };
+    if (!idToken) return reply.status(400).send({ success: false, message: 'idToken is required' });
+
+    // Decode Apple JWT header to get kid
+    const decoded = jwt.decode(idToken, { complete: true }) as any;
+    if (!decoded?.header?.kid) return reply.status(401).send({ success: false, message: 'Invalid Apple token' });
+
+    // Fetch Apple public keys
+    const keysRes = await fetch('https://appleid.apple.com/auth/keys');
+    if (!keysRes.ok) return reply.status(500).send({ success: false, message: 'Could not fetch Apple public keys' });
+    const keys = (await keysRes.json() as any).keys as any[];
+    const appleKey = keys.find((k: any) => k.kid === decoded.header.kid);
+    if (!appleKey) return reply.status(401).send({ success: false, message: 'Apple key not found' });
+
+    // Build PEM from JWK using Node crypto (synchronous)
+    const jwkToPem = (jwk: any): string => {
+      const crypto = require('crypto');
+      const key = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+      return key.export({ type: 'spki', format: 'pem' }) as string;
+    };
+
+    let payload: any;
+    try {
+      const pem = jwkToPem(appleKey);
+      payload = jwt.verify(idToken, pem, { algorithms: ['RS256'], audience: siteSettings.appleClientId, issuer: 'https://appleid.apple.com' });
+    } catch (err) {
+      return reply.status(401).send({ success: false, message: 'Apple token verification failed' });
+    }
+
+    const email = (payload as any).email || appleUser?.email;
+    if (!email) return reply.status(400).send({ success: false, message: 'No email in Apple token' });
+
+    const firstName = appleUser?.name?.firstName || '';
+    const lastName = appleUser?.name?.lastName || '';
+    const name = [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0];
+
+    const user = await findOrCreateSocialUser(email, name, 'apple');
+    const accessToken = signUserToken(request, user);
+    return reply.send({ success: true, accessToken, userId: user._id.toString(), name: user.name, subscriptionPlan: user.subscriptionPlan || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', expiresIn: 604800 });
+  } catch (error) {
+    console.error('Apple Auth Error:', error);
+    return reply.status(500).send({ success: false, message: 'Apple authentication failed' });
   }
 };

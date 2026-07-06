@@ -14,6 +14,7 @@ import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import { ReviewModel } from '../models/Review';
 import { SubscriptionModel } from '../models/Subscription';
 import { logger } from '../lib/logger';
+import uploadHandler from '../lib/uploadHandler';
 
 // Optional user lookup helper
 const getOptionalUserToken = (request: FastifyRequest): string | null => {
@@ -341,8 +342,8 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
 
     // Fetch platform/contact info from settings
     const dbSettings = await SettingsModel.findOne().lean();
-    const platformName = dbSettings?.platformName || 'Kotibox';
-    const contactEmail = dbSettings?.mailFrom || dbSettings?.mailEmail || 'support@kotibox.com';
+    const platformName = dbSettings?.platformName || 'Triple Minds';
+    const contactEmail = dbSettings?.mailFrom || dbSettings?.mailEmail || 'support@tripleminds.com';
     const shareAppText = `Watch amazing short dramas and movies on ${platformName}!`;
 
     const baseUrl = `${request.protocol}://${request.headers.host || request.hostname}`;
@@ -504,5 +505,77 @@ export const deleteAppAccount = async (request: FastifyRequest, reply: FastifyRe
       message: 'Failed to delete account',
       error: error.message
     });
+  }
+};
+
+// ── PATCH Update App User Profile (name / email / avatar URL) ────────────────
+export const updateAppProfile = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = getOptionalUserId(request);
+    if (!userId) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+
+    const { name, email, avatar, phone } = (request.body || {}) as { name?: string; email?: string; avatar?: string; phone?: string };
+
+    const updateData: any = {};
+    if (name && typeof name === 'string') updateData.name = name.trim();
+    if (email && typeof email === 'string') updateData.email = email.toLowerCase().trim();
+    if (avatar && typeof avatar === 'string') updateData.avatar = avatar;
+    if (phone && typeof phone === 'string') updateData.phone = phone.trim();
+
+    if (Object.keys(updateData).length === 0) {
+      return reply.status(400).send({ success: false, message: 'No fields to update' });
+    }
+
+    const user = await UserModel.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!user) return reply.status(404).send({ success: false, message: 'User not found' });
+
+    return reply.send({
+      success: true,
+      data: {
+        id: (user._id as any).toString(),
+        name: user.name,
+        email: user.email,
+        avatar: (user as any).avatar || null,
+        phone: (user as any).phone || null,
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error updating app profile');
+    return reply.status(500).send({ success: false, message: 'Failed to update profile' });
+  }
+};
+
+// ── POST Upload App User Avatar (multipart) ──────────────────────────────────
+export const uploadAppAvatar = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const userId = getOptionalUserId(request);
+    if (!userId) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+
+    const parts = request.parts();
+    let avatarUrl: string | null = null;
+
+    for await (const part of parts) {
+      if (part.type === 'file' && part.fieldname === 'avatar') {
+        const fileInfo = await uploadHandler.saveFileFromPart(part, request, 'IMAGE', 'avatars');
+        avatarUrl = fileInfo.url;
+        break;
+      }
+    }
+
+    if (!avatarUrl) {
+      return reply.status(400).send({ success: false, message: 'No avatar file provided' });
+    }
+
+    await UserModel.findByIdAndUpdate(userId, { $set: { avatar: avatarUrl } });
+
+    return reply.send({ success: true, data: { avatarUrl } });
+  } catch (error: any) {
+    logger.error({ error }, 'Error uploading app avatar');
+    return reply.status(500).send({ success: false, message: 'Failed to upload avatar' });
   }
 };

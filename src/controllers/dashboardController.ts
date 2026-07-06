@@ -6,6 +6,7 @@ import { MovieModel } from '../models/Movie';
 import { GenreModel } from '../models/Genre';
 import { UserWatchProgressModel } from '../models/UserWatchProgress';
 import { ReviewModel } from '../models/Review';
+import { SettingsModel } from '../models/Settings';
 import mongoose from 'mongoose';
 
 // Helper to determine date range
@@ -81,6 +82,13 @@ export const getDashboardStats = async (request: FastifyRequest, reply: FastifyR
     const totalRevenue = totalSubscriptionRevenue[0]?.total || 0;
     const totalReviews = await ReviewModel.countDocuments();
 
+    // Fetch dynamic currency settings
+    const settings = await SettingsModel.findOne().lean();
+    const symbol = settings?.currencySymbol || '₹';
+    const position = settings?.currencyPosition || 'before';
+    const decimals = settings?.decimalPlaces ?? 2;
+    const formatValue = (val: number) => position === 'before' ? `${symbol}${val.toFixed(decimals)}` : `${val.toFixed(decimals)} ${symbol}`;
+
     return reply.send({
       success: true,
       data: {
@@ -90,9 +98,9 @@ export const getDashboardStats = async (request: FastifyRequest, reply: FastifyR
         totalReviews,
         totalStorageUsage: 'Dynamic MB', // Placeholder for actual S3 calculation if needed
         restContent: totalContent + totalMovies,
-        subscriptionRevenue: `₹${totalRevenue.toFixed(2)}`,
-        rentRevenue: '₹0.00', // Update if implementing rentals
-        totalRevenue: `₹${totalRevenue.toFixed(2)}`,
+        subscriptionRevenue: formatValue(totalRevenue),
+        rentRevenue: formatValue(0), // Update if implementing rentals
+        totalRevenue: formatValue(totalRevenue),
       },
     });
   } catch (error: any) {
@@ -229,11 +237,11 @@ export const getTopGenresData = async (_request: FastifyRequest, reply: FastifyR
       value: genreViews[g._id.toString()] || 0
     })).sort((a, b) => b.value - a.value).slice(0, 5);
 
-    // If all views are zero, return mock data layout so chart doesn't crash
+    // If all views are zero, return empty array so chart shows empty state
     if (topGenresData.every(g => g.value === 0)) {
        return reply.send({
          success: true,
-         data: genres.slice(0,5).map(g => ({ name: g.name, value: 1 }))
+         data: []
        });
     }
 
@@ -280,11 +288,18 @@ export const getTransactions = async (_request: FastifyRequest, reply: FastifyRe
       .populate('userId', 'name')
       .lean();
 
+    // Fetch dynamic currency settings
+    const settings = await SettingsModel.findOne().lean();
+    const symbol = settings?.currencySymbol || '₹';
+    const position = settings?.currencyPosition || 'before';
+    const decimals = settings?.decimalPlaces ?? 2;
+    const formatValue = (val: number) => position === 'before' ? `${symbol}${val.toFixed(decimals)}` : `${val.toFixed(decimals)} ${symbol}`;
+
     const transactionsData = transactions.map((t: any) => ({
       name: t.userId?.name || 'Deleted User',
       date: new Date(t.createdAt).toISOString().split('T')[0],
       plan: t.plan,
-      amount: `₹${t.totalAmount.toFixed(2)}`,
+      amount: formatValue(t.totalAmount || 0),
       duration: t.duration,
       method: t.paymentMethod || '-',
       avatar: t.userId?.name ? t.userId.name.charAt(0).toUpperCase() : 'D',

@@ -75,7 +75,7 @@ const LiveChannelSchema = new Schema<ILiveChannel>(
       thumbnail: String,
       genre: String,
     },
-    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'free' },
+    planRequired: { type: String, enum: ['free', 'basic', 'standard', 'premium'], default: 'premium' },
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );

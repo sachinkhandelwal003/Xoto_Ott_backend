@@ -7,6 +7,8 @@ export interface IPage extends Document {
   content?: string;
   status: 'draft' | 'published';
   order: number;
+  metaTitle?: string;
+  metaDescription?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +20,8 @@ const PageSchema = new Schema<IPage>(
     content: String,
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
     order: { type: Number, default: 0 },
+    metaTitle: String,
+    metaDescription: String,
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
