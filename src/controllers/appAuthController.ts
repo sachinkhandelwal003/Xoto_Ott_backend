@@ -450,16 +450,12 @@ export const logoutUser = async (request: FastifyRequest, reply: FastifyReply) =
     await request.jwtVerify();
 
     const userId = (request.user as any).id;
-    const { deviceId } = (request.body as any) || {};
 
     if (userId) {
-      if (deviceId) {
-        // Remove the specific device from the user's device list
-        // so they stop receiving push notifications on this device
-        await UserModel.findByIdAndUpdate(userId, {
-          $pull: { devices: { deviceId } },
-        });
-      }
+      // Remove all devices for this user on logout
+      await UserModel.findByIdAndUpdate(userId, {
+        $set: { devices: [] },
+      });
     }
 
     return reply.status(200).send({
