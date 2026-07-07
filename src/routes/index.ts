@@ -37,6 +37,7 @@ import downloadRoutes from './download';
 import webDownloadRoutes from './webDownload';
 import watchProgressRoutes from './watchProgress';
 import { getHomePage } from '../controllers/appHomeController';
+import { getAppBanners } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 import { getSearchPage } from '../controllers/searchController';
 import { getWebHome } from '../controllers/webHomeController';
@@ -108,8 +109,14 @@ const router: FastifyPluginAsync = async (fastify) => {
   // Mobile movie detail page
   fastify.get('/app/movies/:id', getMovieDetail);
 
-  // Home page route for app
+  // Home page route for app (layout/sections only — no banners)
   fastify.get('/home', getHomePage);
+
+  // App Banners — separate from home layout
+  // ?tab=drama   → drama banners only
+  // ?tab=movie   → movie banners only
+  // ?tab=both    → all banners
+  fastify.get('/app/banners', getAppBanners);
   
   // Explore page (infinite scroll)
   fastify.get('/explore', getExplore);

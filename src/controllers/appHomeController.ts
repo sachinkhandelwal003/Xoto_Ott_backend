@@ -158,7 +158,7 @@ const getFallbackSections = (tab: 'drama' | 'movie') => {
   return fallbacks[tab];
 };
 
-// Get home page data
+// Get home page data — sections/layout only (banners are separate via GET /api/app/banners)
 export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const query = request.query as {
@@ -170,7 +170,6 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     const platform = query.platform || 'mobile';
     const tab = query.tab || 'drama';
     const limit = Math.min(20, Math.max(1, Number(query.limit || 10)));
-    const now = new Date();
     
     const userId = getOptionalUserId(request);
 
@@ -203,22 +202,6 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       .sort({ position: 1 })
       .lean();
     let sectionsToFetch = dbSections.length > 0 ? dbSections : getFallbackSections(tab);
-
-    // Fetch banners for the current tab
-    const bannersRaw = await BannerModel.find({
-      isActive: true,
-      targetPlatforms: platform,
-      contentType: tab, // Strictly match the tab to prevent mixing movies and dramas
-      $and: [
-        { $or: [{ startDate: { $exists: false } }, { startDate: { $lte: now } }] },
-        { $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }] },
-      ],
-    })
-      .sort({ position: 1, createdAt: -1 })
-      .limit(limit)
-      .lean();
-
-    const banners = await populateBannersContent(bannersRaw);
 
     // Fetch content for each section
     const sectionPromises = sectionsToFetch.map(async (section) => {
@@ -320,9 +303,8 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     // ── Aggregate Data (Episodes & Likes) ─────────────────────────────────────
     
-    // Collect all content IDs from banners, sections, and watch progress
+    // Collect all content IDs from sections and watch progress
     const allContentIdsSet = new Set<string>();
-    banners.forEach(b => { if (b.contentId) allContentIdsSet.add(b.contentId._id.toString()); });
     sectionsWithContent.forEach(s => s.content.forEach(c => allContentIdsSet.add(c._id.toString())));
     watchProgressList.forEach(p => { if (p.contentId) allContentIdsSet.add(p.contentId.toString()); });
     
@@ -365,19 +347,6 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     }
 
     // ── Mapping ───────────────────────────────────────────────────────────────
-
-    // Map banners
-    const mappedBanners = banners.map(banner => {
-      if (!banner.contentId) return mapBanner(banner);
-      
-      const cid = (banner.contentId as any)._id.toString();
-      const likeCount = (banner.contentId as any).likes || 0;
-      const isLikedByUser = likedContentIdSet.has(cid);
-      const episodeCount = episodeCountMap.get(cid) || 0;
-      const firstEpisode = firstEpisodeMap.get(cid);
-      
-      return mapBanner(banner, episodeCount, firstEpisode, likeCount, isLikedByUser);
-    });
 
     // Map sections
     const mappedSections = sectionsWithContent.map(section => ({
@@ -465,12 +434,101 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       success: true,
       data: {
         tab,
-        banners: mappedBanners,
         sections: mappedSections,
       },
     });
   } catch (error: any) {
     logger.error({ error }, 'Error getting home page data');
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
+
+// ── GET App Banners (separate from home layout) ────────────────────────────
+export const getAppBanners = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const query = request.query as {
+      tab?: 'drama' | 'movie' | 'both';
+      platform?: 'mobile' | 'web' | 'tv';
+      limit?: string;
+    };
+
+    const tab = query.tab || 'drama';
+    const platform = query.platform || 'mobile';
+    const limit = Math.min(20, Math.max(1, Number(query.limit || 10)));
+    const now = new Date();
+
+    // contentType: 'drama' → drama only
+    // contentType: 'movie' → movie only
+    // contentType: 'both'  → show in all tabs
+    const contentTypeFilter = tab === 'both'
+      ? { contentType: { $in: ['drama', 'movie', 'both'] } }
+      : { contentType: { $in: [tab, 'both'] } };
+
+    const bannersRaw = await BannerModel.find({
+      isActive: true,
+      targetPlatforms: platform,
+      ...contentTypeFilter,
+      $and: [
+        { $or: [{ startDate: { $exists: false } }, { startDate: { $lte: now } }] },
+        { $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }] },
+      ],
+    })
+      .sort({ position: 1, createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const banners = await populateBannersContent(bannersRaw);
+
+    const userId = getOptionalUserId(request);
+    const allContentIds = banners
+      .filter(b => b.contentId)
+      .map(b => new mongoose.Types.ObjectId((b.contentId as any)._id.toString()));
+
+    // Episode counts & first episodes for drama banners
+    const firstEpisodeMap = new Map<string, any>();
+    const episodeCountMap = new Map<string, number>();
+
+    if (allContentIds.length > 0) {
+      const [firstEpisodes, episodeCounts] = await Promise.all([
+        EpisodeModel.aggregate([
+          { $match: { contentId: { $in: allContentIds }, season: 1, episode: 1, processingStatus: 'ready' } },
+          { $sort: { season: 1, episode: 1 } },
+        ]),
+        EpisodeModel.aggregate([
+          { $match: { contentId: { $in: allContentIds } } },
+          { $group: { _id: '$contentId', count: { $sum: 1 } } },
+        ]),
+      ]);
+      firstEpisodes.forEach(e => firstEpisodeMap.set(e.contentId.toString(), e));
+      episodeCounts.forEach(e => episodeCountMap.set(e._id.toString(), e.count));
+    }
+
+    // User likes
+    const likedContentIdSet = new Set<string>();
+    if (userId && allContentIds.length > 0) {
+      const userLikes = await UserLikeModel.find({ userId, contentId: { $in: allContentIds } }).select('contentId').lean();
+      userLikes.forEach(l => likedContentIdSet.add(l.contentId.toString()));
+    }
+
+    const mappedBanners = banners.map(banner => {
+      if (!banner.contentId) return mapBanner(banner);
+      const cid = (banner.contentId as any)._id.toString();
+      const likeCount = (banner.contentId as any).likes || 0;
+      const isLikedByUser = likedContentIdSet.has(cid);
+      const episodeCount = episodeCountMap.get(cid) || 0;
+      const firstEpisode = firstEpisodeMap.get(cid);
+      return mapBanner(banner, episodeCount, firstEpisode, likeCount, isLikedByUser);
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        tab,
+        banners: mappedBanners,
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error }, 'Error getting app banners');
     return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
   }
 };
