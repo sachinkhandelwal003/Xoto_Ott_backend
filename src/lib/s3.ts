@@ -191,7 +191,7 @@ export async function uploadHlsFolderToS3(localFolderPath: string, s3Prefix: str
 
   const uploadDir = async (dirPath: string, keyPrefix: string) => {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
+    const promises = entries.map(async (entry) => {
       const fullPath = path.join(dirPath, entry.name);
       const s3Key   = `${keyPrefix}/${entry.name}`;
       if (entry.isDirectory()) {
@@ -199,6 +199,7 @@ export async function uploadHlsFolderToS3(localFolderPath: string, s3Prefix: str
       } else if (entry.isFile()) {
         const body        = fs.readFileSync(fullPath);
         const contentType = getContentType(entry.name);
+        const ext         = path.extname(entry.name).toLowerCase();
         await s3Client.send(
           new PutObjectCommand({
             Bucket:      settings.bucket,
@@ -206,13 +207,14 @@ export async function uploadHlsFolderToS3(localFolderPath: string, s3Prefix: str
             Body:        body,
             ContentType: contentType,
             // Ensure .m3u8 files are not cached aggressively by CDN/browser
-            CacheControl: ext => ext === '.m3u8' ? 'no-cache' : 'max-age=31536000',
-          } as any)
+            CacheControl: ext === '.m3u8' ? 'no-cache' : 'max-age=31536000',
+          })
         );
         uploadCount++;
         logger.debug(`Uploaded HLS file to S3: ${s3Key}`);
       }
-    }
+    });
+    await Promise.all(promises);
   };
 
   await uploadDir(localFolderPath, s3Prefix);

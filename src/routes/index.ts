@@ -47,8 +47,10 @@ import { getMovieDetail } from '../controllers/appMovieController';
 import adRoutes from './ad';
 import adminNotificationsRoutes from './adminNotifications';
 import reviewRoutes from './review';
+import viewsRoutes from './views';
 
 const router: FastifyPluginAsync = async (fastify) => {
+  fastify.register(viewsRoutes);
   fastify.register(reviewRoutes);
   fastify.register(adminNotificationsRoutes, { prefix: '/admin-notifications' });
   fastify.register(adRoutes);

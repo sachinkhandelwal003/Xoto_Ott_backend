@@ -177,10 +177,17 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(401).send({ success: false, message: 'Unauthorized.' });
     }
 
-    const { page = '1', limit = '20' } = request.query as { page?: string; limit?: string };
+    const { page = '1', limit = '20', profileId } = request.query as { page?: string; limit?: string; profileId?: string };
     const skip = (Number(page) - 1) * Number(limit);
 
-    const history = await UserWatchProgressModel.find({ userId: new mongoose.Types.ObjectId(userId) })
+    const query: any = { userId: new mongoose.Types.ObjectId(userId) };
+    if (profileId) {
+      query.profileId = profileId;
+    } else {
+      query.profileId = null;
+    }
+
+    const history = await UserWatchProgressModel.find(query)
       .sort({ lastWatchedAt: -1 })
       .skip(skip)
       .limit(Number(limit))
@@ -188,7 +195,7 @@ export const getWatchHistory = async (request: FastifyRequest, reply: FastifyRep
       .populate('episodeId', 'title thumbnail episode season duration isFree hlsUrl sourceVideoUrl processingStatus')
       .lean();
 
-    const total = await UserWatchProgressModel.countDocuments({ userId: new mongoose.Types.ObjectId(userId) });
+    const total = await UserWatchProgressModel.countDocuments(query);
 
     // Format the items 
     const items = history.map((h: any) => {

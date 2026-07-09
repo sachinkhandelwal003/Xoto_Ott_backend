@@ -97,7 +97,6 @@ const MovieSchema = new Schema<IMovie>(
       type: String,
       enum: ['published', 'draft', 'processing', 'moderation', 'rejected'],
       default: 'draft',
-      index: true,
     },
     processingStatus: {
       type: String,

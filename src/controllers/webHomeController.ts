@@ -53,6 +53,11 @@ const mapShortDrama = (item: any, totalEpisodes: number, freeEpisodes: number) =
     freeEpisodes,
     language: item.languages && item.languages.length > 0 ? 'Multi' : 'EN',
     badge,
+    contentType: 'drama',
+    description: item.shortDescription || item.description || '',
+    year: item.year?.toString() || new Date(item.createdAt).getFullYear().toString(),
+    releaseDate: item.createdAt,
+    genres: (item.genres || []).map((g: any) => g?.name || g),
   };
 };
 
@@ -76,13 +81,13 @@ export const getWebHome = async (request: FastifyRequest, reply: FastifyReply) =
       ]),
       // 1: Trending Now (Mix)
       Promise.all([
-        MovieModel.find({ status: 'published' }).sort({ views: -1, createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean(),
-        ContentModel.find({ status: 'published' }).sort({ views: -1, createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean()
+        MovieModel.find({ status: 'published', trending: true }).sort({ views: -1, createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean(),
+        ContentModel.find({ status: 'published', trending: true }).sort({ views: -1, createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean()
       ]),
       // 2: New Releases (Mix)
       Promise.all([
-        MovieModel.find({ status: 'published' }).sort({ createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean(),
-        ContentModel.find({ status: 'published' }).sort({ createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean()
+        MovieModel.find({ status: 'published', isNewContent: true }).sort({ createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean(),
+        ContentModel.find({ status: 'published', isNewContent: true }).sort({ createdAt: -1 }).select(selectFields).limit(5).populate('genres', 'name').lean()
       ]),
       // 3: Top Rated Movies
       MovieModel.find({ status: 'published' }).sort({ imdbRating: -1, views: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean(),
@@ -91,7 +96,7 @@ export const getWebHome = async (request: FastifyRequest, reply: FastifyReply) =
       // 5: TV Shows
       ContentModel.find({ status: 'published', type: 'series', contentType: 'series' }).sort({ views: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean(),
       // 6: New Dramas (Short Dramas)
-      ContentModel.find({ status: 'published', type: 'series', contentType: 'drama' }).sort({ createdAt: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean(),
+      ContentModel.find({ status: 'published', type: 'series', contentType: 'drama', isNewContent: true }).sort({ createdAt: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean(),
       // 7: Action Movies
       actionGenre 
         ? MovieModel.find({ status: 'published', genres: actionGenre._id }).sort({ views: -1 }).select(selectFields).limit(10).populate('genres', 'name').lean() 

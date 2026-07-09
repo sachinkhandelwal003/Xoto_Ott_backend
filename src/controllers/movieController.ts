@@ -98,6 +98,14 @@ export const getMovieById = async (request: FastifyRequest, reply: FastifyReply)
   try {
     const { id } = request.params as { id: string };
 
+    // Sync HLS qualities from disk if they exist but are missing in DB
+    try {
+      const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+      await autoDetectAndSyncQualities(id, 'movie');
+    } catch (syncErr) {
+      logger.warn({ syncErr, id }, 'Failed to auto-detect and sync qualities for movie');
+    }
+
     const movie = await MovieModel.findById(id)
       .populate('genres', 'name image')
       .populate('categories', 'name thumbnail bannerImage')
@@ -200,6 +208,14 @@ export const updateMovie = async (request: FastifyRequest, reply: FastifyReply) 
       import('../services/videoProcessor').then(({ processMovieInBackground }) => {
         processMovieInBackground(movie._id, body.hlsUrl);
       });
+    }
+
+    // Sync HLS qualities from disk if they exist but were not submitted/saved properly in update form
+    try {
+      const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+      await autoDetectAndSyncQualities(id, 'movie');
+    } catch (syncErr) {
+      logger.warn({ syncErr, id }, 'Failed to auto-detect and sync qualities during movie update');
     }
 
     const updatedMovie = await MovieModel.findById(id)

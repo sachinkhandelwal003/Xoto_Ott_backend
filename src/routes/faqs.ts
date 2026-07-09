@@ -10,6 +10,9 @@ import {
 } from '../controllers/faqController';
 
 const faqsRoutes: FastifyPluginAsync = async (fastify, opts) => {
+  // Public FAQs listing (no admin permissions required)
+  fastify.get('/public', listFAQs);
+
   // List all FAQs with pagination
   fastify.get('/', { onRequest: [requirePermission('faqs', 'canView')] }, listFAQs);
 

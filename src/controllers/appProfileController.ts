@@ -1,8 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { UserModel } from '../models/User';
+import { AdminUserModel } from '../models/AdminUser';
 import { ContentModel } from '../models/Content';
 import { LanguageModel } from '../models/Language';
 import { SettingsModel } from '../models/Settings';
+import { SubscriptionPlanModel } from '../models/SubscriptionPlan';
+import { PlanLimitModel } from '../models/PlanLimit';
 import mongoose from 'mongoose';
 import { PageModel } from '../models/Page';
 import { UserDownloadModel } from '../models/UserDownload';
@@ -49,12 +52,45 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
     let downloadsList: any[] = [];
     let wishlistList: any[] = [];
     let likesList: any[] = [];
+    let likeRecords: any[] = [];
 
     if (userId) {
       // Cast userId string to ObjectId for all DB queries
       const userObjectId = new mongoose.Types.ObjectId(userId);
 
-      const user = await UserModel.findById(userObjectId).lean();
+      let user = await UserModel.findById(userObjectId).lean();
+      if (!user) {
+        const admin = await AdminUserModel.findById(userObjectId).lean();
+        if (admin) {
+          user = {
+            _id: admin._id,
+            name: admin.name,
+            email: admin.email,
+            phone: admin.phone || '',
+            avatar: admin.avatar || '',
+            subscriptionStatus: 'active',
+            subscriptionPlan: 'premium',
+            videoQuality: 'auto',
+            preferredLanguage: 'English',
+            profiles: [
+              {
+                name: admin.name,
+                isKids: false,
+                maturityLevel: 18,
+                language: 'English',
+              }
+            ],
+            devices: [],
+            languageSelectionSkipped: true,
+            watchlistCount: 0,
+            totalWatchTime: 0,
+            status: 'active',
+            loginCount: admin.loginCount,
+            createdAt: admin.createdAt,
+            updatedAt: admin.updatedAt,
+          } as any;
+        }
+      }
       if (user) {
         // Calculate user sequential number and dynamically format Display ID
         const userNumber = await UserModel.countDocuments({ _id: { $lte: user._id } });
@@ -63,9 +99,19 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         const prefix = appName.substring(0, 4).toUpperCase();
         const displayId = `${prefix}${String(userNumber).padStart(4, '0')}`;
 
+        const plan = await SubscriptionPlanModel.findOne({ name: user.subscriptionPlan }).lean();
+        let profileLimitCount = 1;
+        if (plan) {
+          const limit = await PlanLimitModel.findOne({ planId: plan._id }).lean();
+          if (limit) {
+            profileLimitCount = limit.profileLimitCount;
+          }
+        }
+
         const isActive = user.subscriptionStatus === 'active' && 
                          user.subscriptionPlan !== 'free' && 
                          (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
+
         userProfile = {
           id: user._id.toString(),
           displayId,
@@ -76,6 +122,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
           subscription: isActive,
           subscriptionStatus: isActive ? 'active' : 'inactive',
           subscriptionPlan: isActive ? (user.subscriptionPlan || 'free') : 'free',
+          profileLimitCount,
           videoQuality: user.videoQuality || 'auto',
           preferredLanguage: user.preferredLanguage || 'Hindi',
           accessToken: getOptionalUserToken(request) || null,
@@ -185,6 +232,12 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         .sort({ createdAt: -1 })
         .limit(20)
         .lean();
+
+      const allLikes = await UserLikeModel.find({ userId: userObjectId }).select('contentId episodeId').lean();
+      likeRecords = allLikes.map(l => ({
+        contentId: l.contentId.toString(),
+        episodeId: l.episodeId ? l.episodeId.toString() : null
+      }));
 
       if (likedItems.length > 0) {
         const lMovieIds = likedItems.filter(i => i.contentModelType === 'Movie').map(i => i.contentId);
@@ -377,6 +430,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         downloads: downloadsList,
         wishlist: wishlistList,
         likes: likesList,
+        likeRecords: likeRecords,
         languages: languages.map(lang => ({
           id: lang._id.toString(),
           name: lang.name,
@@ -527,13 +581,32 @@ export const updateAppProfile = async (request: FastifyRequest, reply: FastifyRe
       return reply.status(400).send({ success: false, message: 'No fields to update' });
     }
 
-    const user = await UserModel.findByIdAndUpdate(
+    let user = await UserModel.findByIdAndUpdate(
       userId,
       { $set: updateData },
       { new: true, runValidators: true }
     ).lean();
 
-    if (!user) return reply.status(404).send({ success: false, message: 'User not found' });
+    if (!user) {
+      const admin = await AdminUserModel.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).lean();
+
+      if (!admin) return reply.status(404).send({ success: false, message: 'User not found' });
+
+      return reply.send({
+        success: true,
+        data: {
+          id: (admin._id as any).toString(),
+          name: admin.name,
+          email: admin.email,
+          avatar: admin.avatar || null,
+          phone: admin.phone || null,
+        },
+      });
+    }
 
     return reply.send({
       success: true,
@@ -572,7 +645,10 @@ export const uploadAppAvatar = async (request: FastifyRequest, reply: FastifyRep
       return reply.status(400).send({ success: false, message: 'No avatar file provided' });
     }
 
-    await UserModel.findByIdAndUpdate(userId, { $set: { avatar: avatarUrl } });
+    const user = await UserModel.findByIdAndUpdate(userId, { $set: { avatar: avatarUrl } });
+    if (!user) {
+      await AdminUserModel.findByIdAndUpdate(userId, { $set: { avatar: avatarUrl } });
+    }
 
     return reply.send({ success: true, data: { avatarUrl } });
   } catch (error: any) {

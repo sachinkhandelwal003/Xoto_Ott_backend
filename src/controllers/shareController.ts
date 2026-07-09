@@ -1,12 +1,46 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { MovieModel } from '../models/Movie';
+import { ContentModel } from '../models/Content';
+import { logger } from '../lib/logger';
 
 // Get these from env variables in production
 const APP_PACKAGE_NAME = process.env.APP_PACKAGE_NAME || 'com.xoto.app';
 const APP_SCHEME = process.env.APP_SCHEME || 'xoto';
 const APP_STORE_ID = process.env.APP_STORE_ID || '123456789';
 
+// Helper to increment share count dynamically
+const incrementShareCount = async (contentId: string, contentType?: string) => {
+  try {
+    if (contentType === 'movie') {
+      await MovieModel.findByIdAndUpdate(contentId, { $inc: { shares: 1 } });
+      return;
+    } else if (contentType === 'drama' || contentType === 'series' || contentType === 'tv-show') {
+      await ContentModel.findByIdAndUpdate(contentId, { $inc: { shares: 1 } });
+      return;
+    }
+    
+    // Fallback: If no contentType specified, check Movie first, then Content
+    const movieUpdated = await MovieModel.findByIdAndUpdate(
+      contentId,
+      { $inc: { shares: 1 } }
+    );
+    if (!movieUpdated) {
+      await ContentModel.findByIdAndUpdate(
+        contentId,
+        { $inc: { shares: 1 } }
+      );
+    }
+  } catch (err) {
+    logger.error({ err, contentId }, 'Failed to increment share count');
+  }
+};
+
 export const handleShareRedirect = async (request: FastifyRequest, reply: FastifyReply) => {
   const { contentId } = request.params as { contentId: string };
+  const query = request.query as { contentType?: string };
+
+  // Increment share count dynamically when the link is clicked/visited
+  await incrementShareCount(contentId, query.contentType);
 
   // Android Intent URI (Automatically opens app OR Play Store if not installed)
   const androidIntent = `intent://watch/${contentId}#Intent;scheme=${APP_SCHEME};package=${APP_PACKAGE_NAME};end`;
@@ -56,4 +90,39 @@ export const handleShareRedirect = async (request: FastifyRequest, reply: Fastif
   `;
 
   return reply.type('text/html').send(html);
+};
+
+export const recordShare = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { contentId } = request.params as { contentId: string };
+    const body = request.body as { contentType?: 'drama' | 'movie' | 'series' | 'tv-show' } || {};
+    const contentType = body.contentType;
+
+    await incrementShareCount(contentId, contentType);
+
+    // Fetch the updated count to return in response
+    let sharesCount = 0;
+    const movie = await MovieModel.findById(contentId).select('shares').lean();
+    if (movie) {
+      sharesCount = movie.shares ?? 0;
+    } else {
+      const content = await ContentModel.findById(contentId).select('shares').lean();
+      sharesCount = content?.shares ?? 0;
+    }
+
+    return reply.send({
+      success: true,
+      message: 'Share recorded successfully.',
+      data: {
+        sharesCount
+      }
+    });
+  } catch (error: any) {
+    logger.error(error, 'Error recording share');
+    return reply.status(500).send({
+      success: false,
+      message: 'Failed to record share.',
+      error: error.message
+    });
+  }
 };

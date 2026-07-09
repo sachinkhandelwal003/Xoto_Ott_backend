@@ -53,62 +53,74 @@ export const getWebBrowse = async (request: FastifyRequest, reply: FastifyReply)
       ];
     }
 
-    // Handle genre filtering
+    // Handle genre filtering for all types
     if (genreName && genreName.toLowerCase() !== 'all') {
-      if (contentType === 'movie') {
-        const genre = await GenreModel.findOne({ name: { $regex: new RegExp(`^${genreName}$`, 'i') } }).select('_id').lean();
-        if (genre) {
-          filter.genres = genre._id;
-        } else {
-          // Genre not found, return empty
-          return reply.send({
-            success: true,
-            data: { items: [], pagination: { total: 0, page, limit, totalPages: 0 } },
-          });
-        }
+      const genre = await GenreModel.findOne({ name: { $regex: new RegExp(`^${genreName}$`, 'i') } }).select('_id').lean();
+      if (genre) {
+        filter.genres = genre._id;
       } else {
-        // For show/drama (ContentModel), genres is a string array
-        filter.genres = { $regex: new RegExp(`^${genreName}$`, 'i') };
+        return reply.send({
+          success: true,
+          data: { items: [], pagination: { total: 0, page, limit, totalPages: 0 } },
+        });
       }
-    }
-
-    let Model: any;
-    if (contentType === 'movie') {
-      Model = MovieModel;
-    } else if (contentType === 'show') {
-      Model = ContentModel;
-      filter.type = 'series';
-      filter.contentType = 'series';
-    } else if (contentType === 'drama') {
-      Model = ContentModel;
-      filter.type = 'series';
-      filter.contentType = 'drama';
     }
 
     let sort: any = { createdAt: -1 };
     if (section === 'trending') {
       sort = { views: -1, createdAt: -1 };
+      filter.trending = true;
     } else if (section === 'new') {
       sort = { createdAt: -1 };
+      filter.isNewContent = true;
     } else if (section === 'top-rated') {
       sort = { imdbRating: -1, views: -1 };
     }
 
     const selectFields = 'title description shortDescription thumbnail bannerImage posterImage year rating ageRating duration imdbRating featured trending isNewContent views genres languages createdAt contentType';
 
-    const [rawItems, total] = await Promise.all([
-      Model.find(filter)
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .select(selectFields)
-        .populate('genres', 'name')
-        .lean(),
-      Model.countDocuments(filter)
-    ]);
+    let rawItems: any[] = [];
+    let total = 0;
 
-    const mappedType = contentType === 'movie' ? 'movie' : 'show';
-    const items = rawItems.map((item: any) => mapContentItem(item, mappedType, contentType));
+    if (contentType === 'all') {
+      const [movies, shows, totalMovies, totalShows] = await Promise.all([
+        MovieModel.find(filter).sort(sort).limit(skip + limit).select(selectFields).populate('genres', 'name').lean(),
+        ContentModel.find({ ...filter, status: 'published' }).sort(sort).limit(skip + limit).select(selectFields).populate('genres', 'name').lean(),
+        MovieModel.countDocuments(filter),
+        ContentModel.countDocuments({ ...filter, status: 'published' })
+      ]);
+      
+      const allItems = [...movies.map((m: any) => ({ ...m, _mappedType: 'movie' })), ...shows.map((s: any) => ({ ...s, _mappedType: 'show' }))];
+      
+      if (section === 'trending') allItems.sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
+      else if (section === 'top-rated') allItems.sort((a: any, b: any) => (b.imdbRating || 0) - (a.imdbRating || 0));
+      else allItems.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      rawItems = allItems.slice(skip, skip + limit);
+      total = totalMovies + totalShows;
+    } else {
+      let Model: any;
+      if (contentType === 'movie') Model = MovieModel;
+      else if (contentType === 'show') {
+        Model = ContentModel;
+        filter.type = 'series';
+        filter.contentType = 'series';
+      } else if (contentType === 'drama') {
+        Model = ContentModel;
+        filter.type = 'series';
+        filter.contentType = 'drama';
+      }
+
+      [rawItems, total] = await Promise.all([
+        Model.find(filter).sort(sort).skip(skip).limit(limit).select(selectFields).populate('genres', 'name').lean(),
+        Model.countDocuments(filter)
+      ]);
+    }
+
+    const items = rawItems.map((item: any) => {
+      const mappedType = item._mappedType || (contentType === 'movie' ? 'movie' : 'show');
+      return mapContentItem(item, mappedType, contentType !== 'all' ? contentType : undefined);
+    });
 
     return reply.send({
       success: true,

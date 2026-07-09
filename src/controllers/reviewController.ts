@@ -125,13 +125,13 @@ export const createReviewApp = async (request: FastifyRequest, reply: FastifyRep
     }
 
     // Check if already reviewed
-    const existing = await ReviewModel.findOne({ userId: user._id });
+    const existing = await ReviewModel.findOne({ userId: user.id });
     if (existing) {
       return reply.status(400).send({ success: false, error: 'You have already reviewed the website' });
     }
 
     const review = await ReviewModel.create({
-      userId: user._id,
+      userId: user.id,
       rating,
       comment,
       status: 'published',
@@ -148,7 +148,7 @@ export const deleteReviewApp = async (request: FastifyRequest, reply: FastifyRep
     const user = (request as any).user;
     const { id } = request.params as any;
 
-    const review = await ReviewModel.findOneAndDelete({ _id: id, userId: user._id });
+    const review = await ReviewModel.findOneAndDelete({ _id: id, userId: user.id });
     if (!review) return reply.status(404).send({ success: false, error: 'Review not found or unauthorized' });
 
     return reply.send({ success: true, message: 'Review deleted successfully' });

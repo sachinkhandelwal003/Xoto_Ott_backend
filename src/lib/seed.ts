@@ -271,17 +271,6 @@ async function seedSampleContent() {
       imdbRating: 8.1,
       planRequired: 'standard',
     },
-    {
-      title: 'Campus Love Story',
-      genre: 'Comedy',
-      views: 2800000,
-      daysOld: 15,
-      trending: true,
-      isNew: true,
-      featured: false,
-      imdbRating: 7.5,
-      planRequired: 'basic',
-    },
   ];
 
   const tvShows = [
@@ -369,7 +358,7 @@ async function seedSampleContent() {
       tags: [drama.genre.toLowerCase(), 'drama', 'must-watch'],
       imdbRating: drama.imdbRating,
       maturityContent: index === 1 ? ['Violence', 'Strong Language'] : [],
-      seasons: 2,
+      seasons: 1,
       sections: [],
       planRequired: drama.planRequired,
       createdAt: daysAgo(drama.daysOld),
@@ -454,20 +443,24 @@ async function seedMovies() {
   const languageMap = new Map(dbLanguages.map(l => [l.name.toLowerCase(), l._id]));
 
   const movieData = [
-    { title: '21 Jump Street', genre: 'Comedy', views: 5200000, daysOld: 45, trending: true, isNew: false, featured: true, imdb: 7.2, rating: 'R', age: 17, planRequired: 'basic', description: 'A pair of underachieving cops are sent back to a local high school to blend in and down a synthetic drug ring.', country: 'United States' },
-    { title: '22 Jump Street', genre: 'Comedy', views: 4100000, daysOld: 25, trending: true, isNew: true, featured: true, imdb: 7.0, rating: 'R', age: 17, planRequired: 'standard', description: 'After making their way through high school (twice), big changes are in store for officers Schmidt and Jenko when they go deep undercover at a local college.', country: 'United States' },
-    { title: 'The Dark Knight Legacy', genre: 'Action', views: 3100000, daysOld: 20, trending: true, isNew: true, featured: false, imdb: 9.0, rating: 'PG-13', age: 13, planRequired: 'premium', description: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.', country: 'United States' },
+    { title: 'Interstellar', genre: 'Sci-Fi', views: 8200000, daysOld: 45, trending: true, isNew: false, featured: true, imdb: 8.7, rating: 'PG-13', age: 13, planRequired: 'basic', description: 'When Earth becomes uninhabitable, a team of explorers travels through a wormhole in space in an attempt to ensure humanity\'s survival.', country: 'United States', year: 2014 },
+    { title: 'Inception', genre: 'Action', views: 7500000, daysOld: 30, trending: true, isNew: false, featured: true, imdb: 8.8, rating: 'PG-13', age: 13, planRequired: 'standard', description: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.', country: 'United States', year: 2010 },
+    { title: 'The Matrix', genre: 'Action', views: 6800000, daysOld: 15, trending: true, isNew: false, featured: false, imdb: 8.7, rating: 'R', age: 17, planRequired: 'standard', description: 'When a beautiful stranger leads computer hacker Neo to a forbidding underworld, he discovers the shocking truth--the life he knows is the elaborate deception of an evil cyber-intelligence.', country: 'United States', year: 1999 },
+    { title: 'The Shawshank Redemption', genre: 'Drama', views: 9500000, daysOld: 10, trending: false, isNew: false, featured: true, imdb: 9.3, rating: 'R', age: 17, planRequired: 'free', description: 'Over the course of several years, two convicts form a friendship, seeking consolation and, eventually, redemption through basic compassion.', country: 'United States', year: 1994 },
+    { title: 'Pulp Fiction', genre: 'Crime', views: 5400000, daysOld: 5, trending: true, isNew: true, featured: false, imdb: 8.9, rating: 'R', age: 17, planRequired: 'premium', description: 'The lives of two mob hitmen, a boxer, a gangster and his wife, and a pair of diner bandits intertwine in four tales of violence and redemption.', country: 'United States', year: 1994 },
   ];
 
   const thumbnails = [
     'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=600&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1516571748831-5d81767b788d?w=400&h=600&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=400&h=600&fit=crop&q=80',
   ];
 
   const movies = movieData.map((movie, index) => {
     const genreIds = [genreMap.get(movie.genre.toLowerCase())];
-    const secondaryGenreName = index === 2 ? 'thriller' : 'action';
+    const secondaryGenreName = index === 0 ? 'adventure' : (index === 1 ? 'thriller' : 'thriller');
     if (secondaryGenreName !== movie.genre.toLowerCase() && genreMap.has(secondaryGenreName)) {
       genreIds.push(genreMap.get(secondaryGenreName));
     }
@@ -479,29 +472,33 @@ async function seedMovies() {
     let cast: any[] = [];
     if (index === 0) {
       cast = [
-        { actor: actors[0]?._id, character: 'Morton Schmidt', role: 'Lead Actor' },
-        { actor: actors[1]?._id, character: 'Greg Jenko', role: 'Lead Actor' },
-        { actor: actors[2]?._id, character: 'Molly Tracey', role: 'Lead Actress' },
-        { actor: actors[3]?._id, character: 'Captain Dickson', role: 'Supporting Actor' },
+        { actor: actors[0]?._id, character: 'Cooper', role: 'Lead Actor' },
+        { actor: actors[1]?._id, character: 'Brand', role: 'Lead Actress' },
       ].filter(c => c.actor);
     } else if (index === 1) {
       cast = [
-        { actor: actors[0]?._id, character: 'Morton Schmidt', role: 'Lead Actor' },
-        { actor: actors[1]?._id, character: 'Greg Jenko', role: 'Lead Actor' },
-        { actor: actors[3]?._id, character: 'Captain Dickson', role: 'Supporting Actor' },
+        { actor: actors[0]?._id, character: 'Cobb', role: 'Lead Actor' },
+        { actor: actors[2]?._id, character: 'Ariadne', role: 'Lead Actress' },
+      ].filter(c => c.actor);
+    } else if (index === 2) {
+      cast = [
+        { actor: actors[1]?._id, character: 'Neo', role: 'Lead Actor' },
+        { actor: actors[3]?._id, character: 'Morpheus', role: 'Supporting Actor' },
+      ].filter(c => c.actor);
+    } else if (index === 3) {
+      cast = [
+        { actor: actors[2]?._id, character: 'Andy Dufresne', role: 'Lead Actor' },
+        { actor: actors[3]?._id, character: 'Ellis Boyd Redding', role: 'Lead Actor' },
       ].filter(c => c.actor);
     } else {
       cast = [
-        { actor: actors[0]?._id, character: 'Bruce Wayne / Batman', role: 'Lead Actor' },
-        { actor: actors[1]?._id, character: 'Harvey Dent', role: 'Lead Actor' },
+        { actor: actors[0]?._id, character: 'Vincent Vega', role: 'Lead Actor' },
+        { actor: actors[1]?._id, character: 'Jules Winnfield', role: 'Lead Actor' },
       ].filter(c => c.actor);
     }
 
-    const director = directors[0];
+    const director = directors[index % directors.length] || directors[0];
     const crew = director ? [{ director: director._id, role: 'Director' }] : [];
-    if (index < 2 && directors[1]) {
-      crew.push({ director: directors[1]._id, role: 'Director' });
-    }
 
     const videoQualities = [
       { quality: '1080p' as const, url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8', size: 120000000 },
@@ -525,7 +522,7 @@ async function seedMovies() {
       languages: langIds,
       subtitleLanguages: [],
       audioLanguages: [],
-      year: index === 0 ? 2012 : (index === 1 ? 2014 : 2008),
+      year: movie.year,
       rating: movie.rating,
       ageRating: movie.age,
       duration: 6000 + (index % 10) * 300,
@@ -544,10 +541,10 @@ async function seedMovies() {
       sections: [],
       cast,
       crew,
-      producer: 'Neal H. Moritz',
-      studio: 'Columbia Pictures',
+      producer: 'Hollywood Producer',
+      studio: 'Warner Bros. Pictures',
       country: movie.country,
-      tags: [movie.genre.toLowerCase(), 'movie', 'comedy', 'must-watch'],
+      tags: [movie.genre.toLowerCase(), 'movie', 'popular', 'must-watch'],
       imdbRating: movie.imdb,
       maturityContent: movie.age >= 17 ? ['Violence', 'Strong Language'] : [],
       planRequired: movie.planRequired as any,
@@ -569,12 +566,25 @@ async function seedEpisodes() {
   const dbLanguages = await LanguageModel.find({}).lean();
   const languageMap = new Map(dbLanguages.map(l => [l.name.toLowerCase(), l._id]));
 
+  const episodeThumbnails = [
+    'https://images.unsplash.com/photo-1598897349388-237624760a5b?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1478720568477-152d9b164e63?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1516571748831-5d81767b788d?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1460186141667-b3180f76e83b?w=400&h=250&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=400&h=250&fit=crop&q=80',
+  ];
+
   const episodes: any[] = [];
   
   let epIndex = 0;
   for (const item of content) {
     const totalSeasons = item.seasons || 1;
-    const episodesPerSeason = 5 + (item.title.length % 4); // 5-8 episodes per season
+    const episodesPerSeason = item.contentType === 'drama' ? 5 : (5 + (item.title.length % 4));
     
     for (let season = 1; season <= totalSeasons; season++) {
       for (let ep = 1; ep <= episodesPerSeason; ep++) {
@@ -602,7 +612,7 @@ async function seedEpisodes() {
           contentId: item._id,
           title: `Episode ${ep}`,
           description: `This is the description for season ${season} episode ${ep} of ${item.title}. It contains exciting plot developments and character arcs.`,
-          thumbnail: `https://images.unsplash.com/photo-${1536440136628 + (epIndex % 10)}-849c177e76a1?w=400&h=600&fit=crop&q=80`,
+          thumbnail: episodeThumbnails[epIndex % episodeThumbnails.length],
           duration: item.contentType === 'drama' ? Math.floor(Math.random() * 20) + 40 : 1200 + (ep * 60),
           season: season,
           episode: ep,

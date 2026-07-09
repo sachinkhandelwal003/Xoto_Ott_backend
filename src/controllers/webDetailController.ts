@@ -15,17 +15,39 @@ export const getWebDetail = async (request: FastifyRequest, reply: FastifyReply)
 
     // We don't necessarily know if it's a movie or content just from ID.
     if (typeHint === 'movie') {
-      item = await MovieModel.findById(contentId).populate('genres', 'name').populate('languages', 'name').populate('cast.actor', 'name avatar').populate('crew.director', 'name').lean();
+      item = await MovieModel.findById(contentId)
+        .populate('genres', 'name')
+        .populate('languages', 'name')
+        .populate('cast.actor', 'name image designation')
+        .populate('crew.director', 'name image designation')
+        .lean();
       isMovie = true;
     } else if (typeHint === 'show' || typeHint === 'drama') {
-      item = await ContentModel.findById(contentId).populate('genres', 'name').populate('languages', 'name').populate('cast.actor', 'name avatar').populate('crew.director', 'name').lean();
+      item = await ContentModel.findById(contentId)
+        .populate('genres', 'name')
+        .populate('languages', 'name')
+        .populate('cast.actor', 'name image designation')
+        .populate('crew.director', 'name image designation')
+        .populate('crewMembers.crewMember', 'name image designation')
+        .lean();
     } else {
       // Try movie first
-      item = await MovieModel.findById(contentId).populate('genres', 'name').populate('languages', 'name').populate('cast.actor', 'name avatar').populate('crew.director', 'name').lean();
+      item = await MovieModel.findById(contentId)
+        .populate('genres', 'name')
+        .populate('languages', 'name')
+        .populate('cast.actor', 'name image designation')
+        .populate('crew.director', 'name image designation')
+        .lean();
       if (item) {
         isMovie = true;
       } else {
-        item = await ContentModel.findById(contentId).populate('genres', 'name').populate('languages', 'name').populate('cast.actor', 'name avatar').populate('crew.director', 'name').lean();
+        item = await ContentModel.findById(contentId)
+          .populate('genres', 'name')
+          .populate('languages', 'name')
+          .populate('cast.actor', 'name image designation')
+          .populate('crew.director', 'name image designation')
+          .populate('crewMembers.crewMember', 'name image designation')
+          .lean();
       }
     }
 
@@ -87,6 +109,14 @@ export const getWebDetail = async (request: FastifyRequest, reply: FastifyReply)
       role: c.role || 'Director',
     }));
 
+    const crewMembers = (item.crewMembers || []).map((c: any) => ({
+      id: c.crewMember?._id?.toString() || null,
+      name: c.crewMember?.name || 'Unknown',
+      image: c.crewMember?.image || null,
+      designation: c.crewMember?.designation || null,
+      role: c.role || 'Crew',
+    }));
+
     // Map the basic content item
     const type = isMovie ? 'movie' : 'show';
     const mappedItem = {
@@ -118,6 +148,7 @@ export const getWebDetail = async (request: FastifyRequest, reply: FastifyReply)
       cast,
       directors: crew.filter((c: any) => c.role === 'Director').map((c: any) => c.name),
       crew,
+      crewMembers,
       country: item.country || null,
       studio: item.studio || null,
       producer: item.producer || null,

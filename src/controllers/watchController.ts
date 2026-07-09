@@ -217,6 +217,14 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
 
     // ── 2. If not found, check Movie ──────────────────────────────────────────
     if (!content) {
+      // Sync HLS qualities from disk if they exist but are missing in DB
+      try {
+        const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+        await autoDetectAndSyncQualities(contentId, 'movie');
+      } catch (syncErr) {
+        logger.warn({ syncErr, contentId }, 'Failed to auto-detect and sync qualities for movie in getWatchData');
+      }
+
       content = await MovieModel.findById(contentId)
         .populate('genres', 'name')
         .populate('cast.actor', 'name image')
@@ -395,8 +403,19 @@ export const getWatchData = async (request: FastifyRequest, reply: FastifyReply)
         episodes: episodes.map(mapEpisode),
       }));
 
-      const currentEpisodeRaw = allEpisodes.find(ep => ep.season === requestedSeason && ep.episode === requestedEpisode) || allEpisodes[0];
+      let currentEpisodeRaw = allEpisodes.find(ep => ep.season === requestedSeason && ep.episode === requestedEpisode) || allEpisodes[0];
       if (currentEpisodeRaw) {
+        // Sync HLS qualities from disk if they exist but are missing in DB
+        try {
+          const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+          const synced = await autoDetectAndSyncQualities(currentEpisodeRaw._id, 'episode');
+          if (synced) {
+            currentEpisodeRaw = synced;
+          }
+        } catch (syncErr) {
+          logger.warn({ syncErr, episodeId: currentEpisodeRaw._id }, 'Failed to auto-detect and sync qualities for episode in getWatchData');
+        }
+
         currentEpisode = mapEpisode(currentEpisodeRaw);
         if (!currentEpisode.isLocked) {
           currentEpisode.videoSettings = buildNamedQualities(

@@ -22,6 +22,15 @@ const ensureDir = (dir: string) => {
 
 // Seed default folders
 export const seedDefaultFolders = async () => {
+  // Drop the stale solo `name_1` unique index left over from a previous schema
+  // version. The current compound index { name, parentFolder } replaces it.
+  try {
+    await MediaFolderModel.collection.dropIndex('name_1');
+    logger.info('Dropped stale name_1 index from mediafolders');
+  } catch {
+    // Index doesn't exist — that's fine
+  }
+
   const defaultFolderNames = [
     'Ads',
     'Banner',
@@ -37,19 +46,21 @@ export const seedDefaultFolders = async () => {
   ];
 
   for (const name of defaultFolderNames) {
-    let folder = await MediaFolderModel.findOne({ name, parentFolder: null });
-    if (!folder) {
-      folder = await MediaFolderModel.create({ name, parentFolder: null });
-    }
+    const folder = await MediaFolderModel.findOneAndUpdate(
+      { name, parentFolder: null },
+      { $setOnInsert: { name, parentFolder: null } },
+      { upsert: true, new: true }
+    );
 
     // Seed nested subfolders (Images, Videos) for Movie, TV Show, and Short Drama
-    if (['Movie', 'TV Show', 'Short Drama'].includes(name)) {
+    if (['Movie', 'TV Show', 'Short Drama'].includes(name) && folder) {
       const subfolders = ['Images', 'Videos'];
       for (const subName of subfolders) {
-        const existingSub = await MediaFolderModel.findOne({ name: subName, parentFolder: folder._id });
-        if (!existingSub) {
-          await MediaFolderModel.create({ name: subName, parentFolder: folder._id });
-        }
+        await MediaFolderModel.findOneAndUpdate(
+          { name: subName, parentFolder: folder._id },
+          { $setOnInsert: { name: subName, parentFolder: folder._id } },
+          { upsert: true, new: true }
+        );
       }
     }
   }

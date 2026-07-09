@@ -20,21 +20,22 @@ export const getAllEpisodes = async (request: FastifyRequest, reply: FastifyRepl
     const skip = (page - 1) * limit;
 
     const filter: any = {};
-    if (query.contentId) filter.contentId = query.contentId;
+    if (query.contentId) {
+      filter.contentId = query.contentId;
+    } else if (query.contentType) {
+      const contentIds = await ContentModel.find({ contentType: query.contentType as 'drama' | 'movie' })
+        .select('_id')
+        .lean()
+        .then((contents) => contents.map((c) => c._id));
+      filter.contentId = { $in: contentIds };
+    }
+
     if (query.season) filter.season = Number(query.season);
     if (query.search) {
       filter.$or = [
         { title: new RegExp(query.search, 'i') },
         { description: new RegExp(query.search, 'i') },
       ];
-    }
-
-    if (query.contentType) {
-      const contentIds = await ContentModel.find({ contentType: query.contentType as 'drama' | 'movie' })
-        .select('_id')
-        .lean()
-        .then((contents) => contents.map((c) => c._id));
-      filter.contentId = { $in: contentIds };
     }
 
     const [episodes, total] = await Promise.all([
@@ -71,6 +72,14 @@ export const getAllEpisodes = async (request: FastifyRequest, reply: FastifyRepl
 export const getEpisodeById = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { id } = request.params as { id: string };
+
+    // Sync HLS qualities from disk if they exist but are missing in DB
+    try {
+      const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+      await autoDetectAndSyncQualities(id, 'episode');
+    } catch (syncErr) {
+      logger.warn({ syncErr, id }, 'Failed to auto-detect and sync qualities for episode');
+    }
 
     const episode = await EpisodeModel.findById(id)
       .populate('contentId', 'title thumbnail contentType type')
@@ -159,9 +168,19 @@ export const updateEpisode = async (request: FastifyRequest, reply: FastifyReply
       });
     }
 
+    // Sync HLS qualities from disk if they exist but were not submitted/saved properly in update form
+    try {
+      const { autoDetectAndSyncQualities } = await import('../services/videoProcessor');
+      await autoDetectAndSyncQualities(id, 'episode');
+    } catch (syncErr) {
+      logger.warn({ syncErr, id }, 'Failed to auto-detect and sync qualities during episode update');
+    }
+
+    const updatedEpisode = await EpisodeModel.findById(id).lean();
+
     return reply.send({
       success: true,
-      data: { ...episode, id: episode._id?.toString() },
+      data: { ...updatedEpisode, id: updatedEpisode?._id?.toString() },
     });
   } catch (error: any) {
     logger.error({ error }, 'Error updating episode');
