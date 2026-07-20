@@ -59,6 +59,26 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       const userObjectId = new mongoose.Types.ObjectId(userId);
 
       let user = await UserModel.findById(userObjectId).lean();
+
+      if (user) {
+        // Verify device ID if present in token
+        const token = getOptionalUserToken(request);
+        if (token) {
+          try {
+            const server = request.server as any;
+            const decoded = server.jwt.verify(token) as any;
+            if (decoded.deviceId && decoded.deviceId !== 'unknown') {
+              const deviceExists = (user as any).devices?.some((d: any) => d.deviceId === decoded.deviceId);
+              if (!deviceExists) {
+                return reply.status(401).send({ success: false, message: 'Device was removed, please login again.' });
+              }
+            }
+          } catch (e) {
+            // ignore jwt error here, it was already handled or we fallback to guest
+          }
+        }
+      }
+      
       if (!user) {
         const admin = await AdminUserModel.findById(userObjectId).lean();
         if (admin) {
@@ -109,7 +129,6 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         }
 
         const isActive = user.subscriptionStatus === 'active' && 
-                         user.subscriptionPlan !== 'free' && 
                          (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
 
         userProfile = {
@@ -126,7 +145,15 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
           videoQuality: user.videoQuality || 'auto',
           preferredLanguage: user.preferredLanguage || 'Hindi',
           accessToken: getOptionalUserToken(request) || null,
+          profiles: user.profiles || [],
         };
+        
+        // Fetch review status
+        const existingReview = await ReviewModel.findOne({ userId: user._id }).lean();
+        userProfile.hasReviewed = !!existingReview;
+        if (existingReview) {
+          userProfile.reviewId = existingReview._id.toString();
+        }
       }
 
       // Query latest 5 downloads (cast userId to ObjectId)
@@ -280,6 +307,7 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
         videoQuality: 'auto',
         preferredLanguage: 'Hindi',
         accessToken: null,
+        profiles: [],
       };
     }
 
@@ -383,13 +411,21 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
       .limit(3)
       .lean();
 
-    const recommendations = recommendationsRaw.map(r => ({
-      id: r._id.toString(),
-      title: r.title,
-      thumbnail: r.thumbnail,
-      views: r.views || 0,
-      type: 'drama'
-    }));
+    const baseUrl = `${request.protocol}://${request.headers.host || request.hostname}`;
+
+    const recommendations = recommendationsRaw.map(r => {
+      let absoluteThumbnail = r.thumbnail;
+      if (absoluteThumbnail && !absoluteThumbnail.startsWith('http')) {
+        absoluteThumbnail = `${baseUrl}${absoluteThumbnail.startsWith('/') ? '' : '/'}${absoluteThumbnail}`;
+      }
+      return {
+        id: r._id.toString(),
+        title: r.title,
+        thumbnail: absoluteThumbnail,
+        views: r.views || 0,
+        type: 'drama'
+      };
+    });
 
     // 4. App Links / Pages — resolve API URLs
     const pages = await PageModel.find({ status: 'published' }).lean();
@@ -400,7 +436,6 @@ export const getAppProfile = async (request: FastifyRequest, reply: FastifyReply
     const contactEmail = dbSettings?.mailFrom || dbSettings?.mailEmail || 'support@tripleminds.com';
     const shareAppText = `Watch amazing short dramas and movies on ${platformName}!`;
 
-    const baseUrl = `${request.protocol}://${request.headers.host || request.hostname}`;
 
     const privacyPage = pages.find(p => p.slug === 'privacy-policy');
     const termsPage = pages.find(p => p.slug === 'terms-and-conditions');
@@ -731,11 +766,17 @@ export const createProfile = async (request: FastifyRequest, reply: FastifyReply
                      (!user.subscriptionExpiry || user.subscriptionExpiry > new Date());
                      
     if (isActive && planName !== 'free') {
-      const plan = await SubscriptionPlanModel.findOne({ name: planName }).lean();
+      const plan = await SubscriptionPlanModel.findOne({ name: { $regex: new RegExp(`^${planName}$`, 'i') } }).lean();
       if (plan) {
         const limit = await PlanLimitModel.findOne({ planId: plan._id }).lean();
         if (limit) profileLimitCount = limit.profileLimitCount;
+      } else {
+        // Fallback for active premium users if the exact plan name is not found
+        profileLimitCount = 4;
       }
+    } else if (isActive) {
+      // If they are active but planName is somehow 'free' or empty, give them premium limits as a fallback
+      profileLimitCount = 4;
     }
 
     if ((user as any).profiles.length >= profileLimitCount) {

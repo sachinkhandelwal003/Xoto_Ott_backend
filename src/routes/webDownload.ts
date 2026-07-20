@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { webRequestDownload, webGetDownloads, webDeleteDownload } from '../controllers/webDownloadController';
 import { SubscriptionPlanModel } from '../models/SubscriptionPlan';
+import { SettingsModel } from '../models/Settings';
 
 const webDownloadRoutes: FastifyPluginAsync = async (fastify) => {
   // Public: list active subscription plans — no auth required
@@ -9,6 +10,10 @@ const webDownloadRoutes: FastifyPluginAsync = async (fastify) => {
       const plans = await SubscriptionPlanModel.find({ status: true })
         .sort({ level: 1, price: 1 })
         .lean();
+      
+      const settings = await SettingsModel.findOne().lean();
+      const currencySymbol = settings?.currencySymbol || '₹';
+
       return reply.send({
         success: true,
         data: plans.map((plan) => ({
@@ -21,6 +26,7 @@ const webDownloadRoutes: FastifyPluginAsync = async (fastify) => {
           totalPrice: plan.totalPrice,
           description: plan.description,
           level: plan.level,
+          currencySymbol,
         })),
       });
     } catch (error: any) {

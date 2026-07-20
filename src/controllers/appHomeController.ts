@@ -8,6 +8,7 @@ import { UserLikeModel } from '../models/UserLike';
 import { UserModel } from '../models/User';
 import { LanguageModel } from '../models/Language';
 import { UserWatchProgressModel } from '../models/UserWatchProgress';
+import { AppSettingModel } from '../models/AppSetting';
 import { logger } from '../lib/logger';
 import mongoose from 'mongoose';
 import { isS3Configured, getS3PublicUrl } from '../lib/s3';
@@ -101,7 +102,7 @@ const mapContentItem = (
   firstEpisodeThumbnail: resolveUrl(firstEpisode?.thumbnail || item.thumbnail || null),
   firstEpisodeDuration: firstEpisode?.duration || null,
   firstEpisodeIsFree: firstEpisode?.isFree ?? null,
-  contentPlan: item.plan || 'free',
+  contentPlan: item.planRequired || item.plan || 'free',
 });
 
 const populateBannersContent = async (banners: any[]) => {
@@ -161,7 +162,7 @@ const mapBanner = (
     ctaText: banner.ctaText,
     ctaLink: banner.ctaLink,
     contentId: banner.contentId?._id?.toString(),
-    content: content ? mapContentItem(content, content.type || banner.contentType || 'series', resolveUrl, episodeCount, firstEpisode, likeCount, isLikedByUser) : undefined,
+    content: content ? mapContentItem(content, content.contentType === 'drama' ? 'drama' : (content.type || banner.contentType || 'series'), resolveUrl, episodeCount, firstEpisode, likeCount, isLikedByUser) : undefined,
     type: banner.type,
     contentType: banner.contentType,
     position: banner.position,
@@ -237,7 +238,7 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
 
     // Get sections from database, or fallback to default
     const dbSections = await SectionModel.find({ 
-      contentType: tab, isActive: true })
+      contentType: { $in: [tab, 'mixed'] as any[] }, isActive: true })
       .select('key title category contentType sortBy limit position isActive layout showViewAll itemType filter contentSelection manualContentIds')
       .sort({ position: 1 })
       .lean();
@@ -250,17 +251,29 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       const hasManual = manualIds.length > 0;
 
       const buildFilter = (base: any) => {
+        let sectionFilter = { ...(section.filter || {}) };
+        
+        // Handle custom mediaType filter for dynamic content
+        if (sectionFilter.mediaType) {
+          const isSeriesBase = base.type === 'series';
+          if (sectionFilter.mediaType === 'movie' && isSeriesBase) return null;
+          if (sectionFilter.mediaType === 'series' && !isSeriesBase) return null;
+          
+          delete sectionFilter.mediaType;
+        }
+
+        const manualBase = { status: 'published' };
         if ((section as any).contentSelection === 'manual') {
-          return hasManual ? { ...base, _id: { $in: manualIds } } : null;
+          return hasManual ? { ...manualBase, _id: { $in: manualIds } } : null;
         } else if ((section as any).contentSelection === 'mixed' && hasManual) {
           return {
             $or: [
-              { ...base, ...(section.filter || {}) },
-              { ...base, _id: { $in: manualIds } }
+              { ...base, ...sectionFilter },
+              { ...manualBase, _id: { $in: manualIds } }
             ]
           };
         } else {
-          return { ...base, ...(section.filter || {}) };
+          return { ...base, ...sectionFilter };
         }
       };
 
@@ -279,29 +292,32 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
             .populate('genres', 'name')
             .lean();
         }
-
-        // Fallback if no matching language content
-        if (content.length === 0 && targetLanguageId) {
-          const fallbackBase = { type: 'series', status: 'published', contentType: 'drama' };
-          const fallbackFilter = buildFilter(fallbackBase);
-          if (fallbackFilter) {
-            content = await ContentModel.find(fallbackFilter)
-              .sort(section.sortBy)
-              .limit(section.limit)
-              .populate('languages', 'name')
-              .populate('genres', 'name')
-              .lean();
-          }
-        }
-      } else {
-        const baseFilter: any = { status: 'published' };
+        } else {
+        const baseMovieFilter: any = { status: 'published' };
+        const baseSeriesFilter: any = { type: 'series', status: 'published', contentType: 'series' };
+        
         if (targetLanguageId) {
-          baseFilter.languages = targetLanguageId;
+          baseMovieFilter.languages = targetLanguageId;
+          baseSeriesFilter.languages = targetLanguageId;
         }
         
-        const filter = buildFilter(baseFilter);
-        if (filter) {
-          content = await MovieModel.find(filter)
+        const filterMovie = buildFilter(baseMovieFilter);
+        const filterSeries = buildFilter(baseSeriesFilter);
+        
+        let movies: any[] = [];
+        let series: any[] = [];
+
+        if (filterMovie) {
+          movies = await MovieModel.find(filterMovie)
+            .sort(section.sortBy)
+            .limit(section.limit)
+            .populate('languages', 'name')
+            .populate('genres', 'name')
+            .lean();
+        }
+        
+        if (filterSeries) {
+          series = await ContentModel.find(filterSeries)
             .sort(section.sortBy)
             .limit(section.limit)
             .populate('languages', 'name')
@@ -309,20 +325,26 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
             .lean();
         }
 
+        let combined = [...movies, ...series];
+        const sortKey = Object.keys(section.sortBy || {})[0] || 'createdAt';
+        const sortDir = (section.sortBy as any)[sortKey] === 1 ? 1 : -1;
+        combined.sort((a, b) => {
+          const valA = a[sortKey] || 0;
+          const valB = b[sortKey] || 0;
+          if (valA < valB) return -1 * sortDir;
+          if (valA > valB) return 1 * sortDir;
+          return 0;
+        });
+        
+        content = combined.slice(0, section.limit);
+
         // Fallback if no matching language content
-        if (content.length === 0 && targetLanguageId) {
-          const fallbackBase = { status: 'published' };
-          const fallbackFilter = buildFilter(fallbackBase);
-          if (fallbackFilter) {
-            content = await MovieModel.find(fallbackFilter)
-              .sort(section.sortBy)
-              .limit(section.limit)
-              .populate('languages', 'name')
-              .populate('genres', 'name')
-              .lean();
-          }
-        }
       }
+      
+      if (content.length === 0) {
+        return null;
+      }
+      
       return { ...section, content };
     });
 
@@ -357,11 +379,13 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       }
     }
 
+    const validSections = sectionsWithContent.filter((s): s is NonNullable<typeof s> => s !== null);
+
     // ── Aggregate Data (Episodes & Likes) ─────────────────────────────────────
     
     // Collect all content IDs from sections and watch progress
     const allContentIdsSet = new Set<string>();
-    sectionsWithContent.forEach(s => s.content.forEach(c => allContentIdsSet.add(c._id.toString())));
+    validSections.forEach(s => s.content.forEach((c: any) => allContentIdsSet.add(c._id.toString())));
     watchProgressList.forEach(p => { if (p.contentId) allContentIdsSet.add(p.contentId.toString()); });
     
     const allContentIds = Array.from(allContentIdsSet).map(id => new mongoose.Types.ObjectId(id));
@@ -405,7 +429,7 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
     // ── Mapping ───────────────────────────────────────────────────────────────
 
     // Map sections
-    const mappedSections = sectionsWithContent.map(section => ({
+    const mappedSections = validSections.map(section => ({
       key: section.key,
       title: section.title,
       category: section.category,
@@ -486,16 +510,27 @@ export const getHomePage = async (request: FastifyRequest, reply: FastifyReply) 
       });
     }
 
+    // Get Custom Tab Name
+    const appSetting = await AppSettingModel.findOne({ key: 'home-tabs-config' }).lean();
+    let tabName = tab === 'drama' ? 'Short Dramas' : 'Movies & Series';
+    if (appSetting && appSetting.value && Array.isArray(appSetting.value)) {
+      const tabConfig = appSetting.value.find((t: any) => t.id === tab);
+      if (tabConfig && tabConfig.name) {
+        tabName = tabConfig.name;
+      }
+    }
+
     return reply.send({
       success: true,
       data: {
         tab,
+        tabName,
         sections: mappedSections,
       },
     });
   } catch (error: any) {
     logger.error({ error }, 'Error getting home page data');
-    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.stack });
   }
 };
 
@@ -542,7 +577,22 @@ export const getAppBanners = async (request: FastifyRequest, reply: FastifyReply
       .limit(limit)
       .lean();
 
-    const banners = await populateBannersContent(bannersRaw);
+    let banners = await populateBannersContent(bannersRaw);
+
+    // Strict filtering based on the actual populated content
+    if (tab === 'drama') {
+      banners = banners.filter(b => {
+        if (!b.contentId) return true;
+        return (b.contentId as any).contentType === 'drama';
+      });
+    } else if (tab === 'movie') {
+      banners = banners.filter(b => {
+        if (!b.contentId) return true;
+        const contentType = (b.contentId as any).contentType;
+        const type = (b.contentId as any).type;
+        return type === 'movie' || contentType === 'series';
+      });
+    }
 
     const { userId } = getAuthData(request);
     const allContentIds = banners

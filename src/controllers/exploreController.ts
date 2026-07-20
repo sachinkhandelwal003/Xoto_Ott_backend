@@ -119,6 +119,12 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
 
     if (contentType === 'drama') {
       filter.contentType = 'drama';
+      // Ensure only new, trending, and featured (hot) short dramas are shown
+      filter.$or = [
+        { isNewContent: true },
+        { trending: true },
+        { featured: true }
+      ];
     }
 
     // Exclude content IDs the client has already seen
@@ -184,16 +190,7 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         .populate('genres', 'name')
         .lean();
 
-      // Fallback if no matching language content
-      if (rawContents.length === 0 && targetLanguageId) {
-        rawContents = await MovieModel.find(filter)
-          .sort(sortBy)
-          .skip(offset)
-          .limit(fetchLimit)
-          .populate('languages', 'name')
-          .populate('genres', 'name')
-          .lean();
-      }
+
     } else {
       const langFilter = { ...filter };
       if (targetLanguageId) {
@@ -207,16 +204,7 @@ export const getExplore = async (request: FastifyRequest, reply: FastifyReply) =
         .populate('genres', 'name')
         .lean();
 
-      // Fallback if no matching language content
-      if (rawContents.length === 0 && targetLanguageId) {
-        rawContents = await ContentModel.find(filter)
-          .sort(sortBy)
-          .skip(offset)
-          .limit(fetchLimit)
-          .populate('languages', 'name')
-          .populate('genres', 'name')
-          .lean();
-      }
+
     }
 
     logger.info(

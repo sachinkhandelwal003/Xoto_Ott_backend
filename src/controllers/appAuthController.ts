@@ -189,6 +189,7 @@ export const verifyOtp = async (request: FastifyRequest, reply: FastifyReply) =>
       name: userDoc.name,
       phone: (userDoc as any).phone,
       role: 'user' as const,
+      deviceId: deviceId || 'unknown',
     };
     const accessToken = server.jwt.sign(tokenPayload, {
       expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d',
@@ -409,10 +410,10 @@ export const loginUser = async (request: FastifyRequest, reply: FastifyReply) =>
 };
 
 // ── Helper: sign a user JWT ────────────────────────────────────────────────
-function signUserToken(request: FastifyRequest, user: any) {
+function signUserToken(request: FastifyRequest, user: any, deviceId?: string) {
   const server = request.server as any;
   return server.jwt.sign(
-    { id: user._id.toString(), name: user.name, role: 'user' },
+    { id: user._id.toString(), name: user.name, role: 'user', deviceId: deviceId || 'unknown' },
     { expiresIn: process.env.MOBILE_JWT_EXPIRES_IN || '7d' }
   );
 }

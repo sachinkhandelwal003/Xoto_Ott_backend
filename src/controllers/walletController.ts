@@ -42,9 +42,17 @@ export const getWalletData = async (request: FastifyRequest, reply: FastifyReply
 export const getCoinPackages = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const packages = await CoinPackageModel.find({ isActive: true }).sort({ price: 1 }).lean();
+    const settings = await SettingsModel.findOne().lean();
+    const currencySymbol = settings?.currencySymbol || '₹';
+    
+    const dataWithCurrency = packages.map(p => ({
+      ...p,
+      currencySymbol
+    }));
+
     return reply.send({
       success: true,
-      data: packages,
+      data: dataWithCurrency,
     });
   } catch (error: any) {
     logger.error({ error }, 'Error fetching coin packages');

@@ -260,3 +260,16 @@ export const getWebHome = async (request: FastifyRequest, reply: FastifyReply) =
     return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
   }
 };
+
+export const getWebAllContent = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const [movies, dramas] = await Promise.all([
+      MovieModel.find({ status: 'published' }).lean(),
+      ContentModel.find({ status: 'published' }).lean()
+    ]);
+    return reply.send({ success: true, data: { movies, dramas } });
+  } catch (error: any) {
+    logger.error({ error }, 'Error fetching web all content API data');
+    return reply.status(500).send({ success: false, message: 'Internal server error', error: error.message });
+  }
+};

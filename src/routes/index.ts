@@ -43,10 +43,11 @@ import { getHomePage } from '../controllers/appHomeController';
 import { getAppBanners } from '../controllers/appHomeController';
 import { getExplore } from '../controllers/exploreController';
 import { getSearchPage } from '../controllers/searchController';
-import { getWebHome } from '../controllers/webHomeController';
+import { getWebHome, getWebAllContent } from '../controllers/webHomeController';
 import { getWebBrowse } from '../controllers/webBrowseController';
 import { getWebDetail } from '../controllers/webDetailController';
 import { getMovieDetail } from '../controllers/appMovieController';
+import { getSeriesDetail } from '../controllers/appSeriesController';
 import adRoutes from './ad';
 import adminNotificationsRoutes from './adminNotifications';
 import reviewRoutes from './review';
@@ -122,6 +123,9 @@ const router: FastifyPluginAsync = async (fastify) => {
   // Mobile movie detail page
   fastify.get('/app/movies/:id', getMovieDetail);
 
+  // Mobile series detail page (includes seasons and episodes)
+  fastify.get('/app/series/:id', getSeriesDetail);
+
   // Home page route for app (layout/sections only — no banners)
   fastify.get('/home', getHomePage);
 
@@ -139,6 +143,9 @@ const router: FastifyPluginAsync = async (fastify) => {
 
   // Web Homepage aggregated data
   fastify.get('/web-home', getWebHome);
+  
+  // Web all content for dynamic sections
+  fastify.get('/web-all-content', getWebAllContent);
   
   // Web Browse paginated data
   fastify.get('/web-browse', getWebBrowse);

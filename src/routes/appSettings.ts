@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { getAppSettings, updateAppSettings, addAppSetting, deleteAppSetting, editAppSetting } from '../controllers/appSettingController';
+import { getAppSettings, updateAppSettings, addAppSetting, deleteAppSetting, editAppSetting, getHomeTabs, updateHomeTabs } from '../controllers/appSettingController';
 
 const appSettingsRoutes: FastifyPluginAsync = async (fastify, opts) => {
+  fastify.get('/home-tabs', getHomeTabs);
+  fastify.put('/home-tabs', updateHomeTabs);
   fastify.get('/', getAppSettings);
   fastify.put('/', updateAppSettings);
   fastify.post('/', addAppSetting);

@@ -1,8 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { MovieModel } from '../models/Movie';
 import { ContentModel } from '../models/Content';
+import { EpisodeModel } from '../models/Episode';
 import { UserModel } from '../models/User';
 import { LanguageModel } from '../models/Language';
+import { GenreModel } from '../models/Genre';
 import { logger } from '../lib/logger';
 import mongoose from 'mongoose';
 
@@ -21,7 +23,7 @@ const getOptionalUserId = (request: FastifyRequest): string | null => {
 };
 
 // Unified item mapper
-const mapSearchItem = (item: any, type: 'movie' | 'drama' | 'series') => ({
+const mapSearchItem = (item: any, type: 'movie' | 'drama' | 'series', episodeCount = 0) => ({
   id: item._id.toString(),
   title: item.title,
   description: item.description,
@@ -30,6 +32,8 @@ const mapSearchItem = (item: any, type: 'movie' | 'drama' | 'series') => ({
   bannerImage: item.bannerImage,
   posterImage: item.posterImage || item.thumbnail || null,
   type,
+  episodeCount,
+  contentPlan: item.planRequired || 'free',
   views: item.views || 0,
   rating: item.rating,
   year: item.year,
@@ -57,14 +61,6 @@ export const getRecommendations = async (preferredLanguage: string) => {
     .limit(6)
     .lean();
 
-  // Fallback for movies if no match in target language
-  if (recMovies.length === 0 && targetLanguageId) {
-    recMovies = await MovieModel.find({ status: 'published' })
-      .sort({ views: -1, createdAt: -1 })
-      .limit(6)
-      .lean();
-  }
-
   // Fetch recommended dramas/series (language filtered)
   const dramaFilter: any = { status: 'published', type: 'series' };
   if (targetLanguageId) dramaFilter.languages = targetLanguageId;
@@ -73,18 +69,19 @@ export const getRecommendations = async (preferredLanguage: string) => {
     .limit(6)
     .lean();
 
-  // Fallback for dramas if no match in target language
-  if (recDramas.length === 0 && targetLanguageId) {
-    recDramas = await ContentModel.find({ status: 'published', type: 'series' })
-      .sort({ views: -1, createdAt: -1 })
-      .limit(6)
-      .lean();
-  }
+  // Fetch episode counts for dramas
+  const dramaIds = recDramas.map(d => d._id);
+  const episodeCounts = await EpisodeModel.aggregate([
+    { $match: { contentId: { $in: dramaIds } } },
+    { $group: { _id: '$contentId', count: { $sum: 1 } } }
+  ]);
+  const episodeCountMap = new Map<string, number>();
+  episodeCounts.forEach(e => episodeCountMap.set(e._id.toString(), e.count));
 
   // Merge and map recommendations
   const recommendationsList = [
-    ...recMovies.map(m => mapSearchItem(m, 'movie')),
-    ...recDramas.map(d => mapSearchItem(d, d.contentType === 'drama' ? 'drama' : 'series'))
+    ...recMovies.map(m => mapSearchItem(m, 'movie', 0)),
+    ...recDramas.map(d => mapSearchItem(d, d.contentType === 'drama' ? 'drama' : 'series', episodeCountMap.get(d._id.toString()) || 0))
   ];
 
   // Sort recommendations by views to make them look uniform
@@ -114,6 +111,14 @@ export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply
     }
 
     if (!searchTerm) {
+      let targetLanguageId: mongoose.Types.ObjectId | null = null;
+      if (preferredLanguage) {
+        const langDoc = await LanguageModel.findOne({ name: new RegExp(`^${preferredLanguage}$`, 'i') }).lean();
+        if (langDoc) {
+          targetLanguageId = langDoc._id as mongoose.Types.ObjectId;
+        }
+      }
+      
       // 1. Initial State: Return Trending Searches & Recommended For You
 
       // A. Fetch Trending Searches (top viewed/liked titles across movies & dramas)
@@ -147,21 +152,58 @@ export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply
       });
     }
 
+    let targetLanguageId: mongoose.Types.ObjectId | null = null;
+    if (preferredLanguage) {
+      const langDoc = await LanguageModel.findOne({ name: new RegExp(`^${preferredLanguage}$`, 'i') }).lean();
+      if (langDoc) {
+        targetLanguageId = langDoc._id as mongoose.Types.ObjectId;
+      }
+    }
+
     // 2. Active Query State: Perform Search
 
     const regex = new RegExp(searchTerm, 'i');
+
+    // 1. Check for genre matches
+    const matchedGenres = await GenreModel.find({ name: regex }).select('_id').lean();
+    const genreIds = matchedGenres.map(g => g._id);
+
+    // 2. Determine type matches
+    const isMovieSearch = /movie/i.test(searchTerm);
+    const isDramaSearch = /drama/i.test(searchTerm);
+    const isSeriesSearch = /series|tv show|show/i.test(searchTerm);
+
+    // Build query conditions
+    const movieQueryOptions: any[] = [
+      { title: regex },
+      { originalTitle: regex },
+      { description: regex },
+      { shortDescription: regex },
+      { tags: regex }
+    ];
+    if (genreIds.length > 0) movieQueryOptions.push({ genres: { $in: genreIds } });
+
+    const contentQueryOptions: any[] = [
+      { title: regex },
+      { originalTitle: regex },
+      { description: regex },
+      { shortDescription: regex },
+      { tags: regex }
+    ];
+    if (genreIds.length > 0) contentQueryOptions.push({ genres: { $in: genreIds } });
+
+    // If explicit type is searched, we don't need text match if they just typed the type.
+    // We add an empty filter that matches anything if it's that type.
+    if (isMovieSearch) movieQueryOptions.push({}); // Match any movie
+    if (isDramaSearch) contentQueryOptions.push({ contentType: 'drama' });
+    if (isSeriesSearch) contentQueryOptions.push({ contentType: 'series' });
 
     const [matchedMovies, matchedContents] = await Promise.all([
       // Search movies
       MovieModel.find({
         status: 'published',
-        $or: [
-          { title: regex },
-          { originalTitle: regex },
-          { description: regex },
-          { shortDescription: regex },
-          { tags: regex }
-        ]
+        ...(targetLanguageId ? { languages: targetLanguageId } : {}),
+        $or: movieQueryOptions
       })
         .limit(20)
         .lean(),
@@ -169,21 +211,26 @@ export const getSearchPage = async (request: FastifyRequest, reply: FastifyReply
       // Search dramas and TV shows
       ContentModel.find({
         status: 'published',
-        $or: [
-          { title: regex },
-          { originalTitle: regex },
-          { description: regex },
-          { shortDescription: regex },
-          { tags: regex }
-        ]
+        type: 'series',
+        ...(targetLanguageId ? { languages: targetLanguageId } : {}),
+        $or: contentQueryOptions
       })
         .limit(20)
         .lean()
     ]);
 
+    // Fetch episode counts for matched dramas
+    const matchedDramaIds = matchedContents.map(d => d._id);
+    const searchEpisodeCounts = await EpisodeModel.aggregate([
+      { $match: { contentId: { $in: matchedDramaIds } } },
+      { $group: { _id: '$contentId', count: { $sum: 1 } } }
+    ]);
+    const searchEpisodeCountMap = new Map<string, number>();
+    searchEpisodeCounts.forEach(e => searchEpisodeCountMap.set(e._id.toString(), e.count));
+
     const results = [
-      ...matchedMovies.map(m => mapSearchItem(m, 'movie')),
-      ...matchedContents.map(c => mapSearchItem(c, c.contentType === 'drama' ? 'drama' : 'series'))
+      ...matchedMovies.map(m => mapSearchItem(m, 'movie', 0)),
+      ...matchedContents.map(c => mapSearchItem(c, c.contentType === 'drama' ? 'drama' : 'series', searchEpisodeCountMap.get(c._id.toString()) || 0))
     ];
 
     // Sort search results by views/popularity

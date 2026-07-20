@@ -179,7 +179,7 @@ export const getMovieDetail = async (request: FastifyRequest, reply: FastifyRepl
       : null;
 
     // ── 6. Video settings (quality options) ──────────────────────────────────
-    const hlsUrl = movie.hlsUrl || null;
+    const hlsUrl = movie.hlsUrl || movie.videoUrl || null;
     const qualities: any[] = movie.videoQualities || [];
 
     // Sort qualities in the correct playback order (144p → 4K)

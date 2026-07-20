@@ -387,7 +387,8 @@ export const createRazorpayOrder = async (request: FastifyRequest, reply: Fastif
     });
   } catch (error: any) {
     console.error('Razorpay Create Order Error:', error);
-    return reply.status(500).send({ success: false, error: error.message });
+    const errorMsg = error?.error?.description || error?.message || 'Failed to create Razorpay order';
+    return reply.status(400).send({ success: false, error: errorMsg });
   }
 };
 

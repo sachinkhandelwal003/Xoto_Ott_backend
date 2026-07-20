@@ -184,3 +184,30 @@ export const editAppSetting = async (request: FastifyRequest, reply: FastifyRepl
     return reply.status(500).send({ success: false, error: error.message });
   }
 };
+
+export const getHomeTabs = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const appSetting = await AppSettingModel.findOne({ key: 'home-tabs-config' });
+    const tabs = appSetting?.value || [
+      { id: 'drama', name: 'Short Dramas' },
+      { id: 'movie', name: 'Movies & Series' },
+    ];
+    return reply.send({ success: true, data: tabs });
+  } catch (error: any) {
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};
+
+export const updateHomeTabs = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { tabs } = request.body as { tabs: { id: string; name: string }[] };
+    const appSetting = await AppSettingModel.findOneAndUpdate(
+      { key: 'home-tabs-config' },
+      { value: tabs as any },
+      { new: true, upsert: true }
+    );
+    return reply.send({ success: true, data: appSetting.value });
+  } catch (error: any) {
+    return reply.status(500).send({ success: false, error: error.message });
+  }
+};

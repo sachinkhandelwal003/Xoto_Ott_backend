@@ -12,7 +12,8 @@ export const getAds = async (request: FastifyRequest, reply: FastifyReply) => {
     if (query.placement) filter.placement = query.placement;
 
     const ads = await AdModel.find(filter).sort({ createdAt: -1 }).lean();
-    return reply.send({ success: true, data: ads });
+    const mappedAds = ads;
+    return reply.send({ success: true, data: mappedAds });
   } catch (error: any) {
     return reply.status(500).send({ success: false, error: error.message });
   }
@@ -95,7 +96,8 @@ export const getActiveAds = async (request: FastifyRequest, reply: FastifyReply)
       AdModel.updateMany({ _id: { $in: adIds } }, { $inc: { impressions: 1 } }).exec();
     }
 
-    return reply.send({ success: true, data: ads });
+    const mappedAds = ads;
+    return reply.send({ success: true, data: mappedAds });
   } catch (error: any) {
     return reply.status(500).send({ success: false, error: error.message });
   }
